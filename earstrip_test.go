@@ -212,8 +212,9 @@ func TestLonLatVertices(t *testing.T) {
 	if len(tris) != 3*2*n {
 		t.Errorf("%d triangles, want %d", len(tris)/3, 2*n)
 	}
-	// test.cpp allows 500 ms; a quadratic join takes far longer, a slower machine or the race detector somewhat
-	if elapsed > 2*time.Second {
+	// test.cpp allows 500 ms; a quadratic join takes far longer, a slower machine somewhat (the race detector too
+	// much to tell)
+	if !raceEnabled && elapsed > 2*time.Second {
 		t.Errorf("took %v: joining the hole turned quadratic?", elapsed)
 	}
 }

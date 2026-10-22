@@ -28,11 +28,14 @@ jobs:
       - run: go vet -tags earstrip_cgo ./...
       - run: go test ./...
       - run: go test -race -short ./...
+      # the oracle needs libc++ (see internal/oracle/doc.go): macOS has it
       - name: Differential tests against the C++ header
+        if: runner.os == 'macOS'
         run: go test -tags earstrip_cgo -short ./internal/oracle/...
 
   conformance:
-    runs-on: ubuntu-latest
+    # macOS for libc++, see internal/oracle/doc.go
+    runs-on: macos-latest
     env:
       EARSTRIP_REQUIRE_DATA: "1"
     steps:
@@ -61,5 +64,7 @@ jobs:
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.13.2
+          # built with the runner's Go, so that it can read that Go's standard library
+          install-mode: goinstall
       - name: Lint with the cgo oracle
         run: golangci-lint run --build-tags earstrip_cgo ./...
