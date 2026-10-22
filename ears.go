@@ -280,14 +280,6 @@ func (t *Triangulator[I]) emptyEar(b *node[I]) bool {
 	return emptyTriangleBox(t.items, start[t.bucket(lo)], start[t.bucket(hi)+1], a, b, c, ia, ic)
 }
 
-// Updates the corner flag of node v, dropping it from the blockers once it turns convex.
-func (t *Triangulator[I]) refreshCorner(v, prev, next *node[I], id uint32) {
-	reflex := crossN(prev, v, next) <= 0
-	if v.flag != 0 && !reflex {
-		t.dropBlocker(v, id)
-	}
-	v.reflex = b2u(reflex)
-}
 
 // Removes node id from the blocker index: swapped out of a single bucket, marked gone in several.
 func (t *Triangulator[I]) dropBlocker(v *node[I], id uint32) {
@@ -332,8 +324,19 @@ func (t *Triangulator[I]) unlink(v uint32) {
 	na, nc := &n[a], &n[c]
 	na.next = c
 	nc.prev = a
-	t.refreshCorner(na, &n[na.prev], nc, a)
-	t.refreshCorner(nc, na, &n[nc.next], c)
+	// Updates the corner flags of both neighbors, dropping a neighbor from the blockers once it turns convex (the C++
+	// refreshCorner, written out: a call per neighbor costs more than it shares). Dropping one does not change the
+	// other corner.
+	reflexA := crossN(&n[na.prev], na, nc) <= 0
+	reflexC := crossN(na, nc, &n[nc.next]) <= 0
+	if na.flag != 0 && !reflexA {
+		t.dropBlocker(na, a)
+	}
+	na.reflex = b2u(reflexA)
+	if nc.flag != 0 && !reflexC {
+		t.dropBlocker(nc, c)
+	}
+	nc.reflex = b2u(reflexC)
 }
 
 // Drops repeated points and zero-area corners from the boundary through v; returns the vertex count.
