@@ -61,10 +61,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
-      - uses: golangci/golangci-lint-action@v8
-        with:
-          version: v2.13.2
-          # built with the runner's Go, so that it can read that Go's standard library
-          install-mode: goinstall
+      # built with the runner's Go, so that it can read that Go's standard library
+      - run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
       - name: Lint with the cgo oracle
-        run: golangci-lint run --build-tags earstrip_cgo ./...
+        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run --build-tags earstrip_cgo ./...
