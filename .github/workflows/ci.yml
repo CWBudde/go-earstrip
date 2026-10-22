@@ -17,9 +17,10 @@ jobs:
         with:
           go-version: stable
       - run: go vet ./...
+      - run: go vet -tags earstrip_cgo ./...
       - run: go test ./...
       - name: Differential tests against the C++ header
-        run: go test -tags earstrip_cgo ./internal/oracle/...
+        run: go test -tags earstrip_cgo -short ./internal/oracle/...
 
   conformance:
     runs-on: ubuntu-latest
@@ -34,6 +35,8 @@ jobs:
           key: bench-data-1
       - run: ./scripts/fetch-data.sh
       - run: go test -run TestConformance -v -timeout 30m .
+      - name: The C++ against the stored hashes, then go-earstrip against the C++ on every data file
+        run: go test -tags earstrip_cgo -timeout 60m ./internal/oracle/...
 
   lint:
     runs-on: ubuntu-latest
