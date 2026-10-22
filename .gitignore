@@ -1,0 +1,9 @@
+# Benchmark polygons (OpenStreetMap, ODbL): fetched by scripts/fetch-data.sh, never committed
+/data/
+*.test
+*.out
+*.prof
+coverage.html
+.DS_Store
+.claude/
+/bin/

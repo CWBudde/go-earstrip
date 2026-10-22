@@ -1,0 +1,17 @@
+version = "2"
+
+[run]
+timeout = "5m"
+tests = true
+
+[linters]
+default = "standard"
+enable = ["misspell", "gocritic", "revive"]
+disable = ["errcheck"]
+
+[linters.exclusions]
+generated = "strict"
+
+[linters.settings.gocritic]
+enabled-tags = ["diagnostic", "style", "performance"]
+disabled-checks = ["commentedOutCode", "unnamedResult", "importShadow", "hugeParam", "paramTypeCombine", "ptrToRefParam"]
