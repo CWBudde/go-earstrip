@@ -39,16 +39,10 @@ func (t *Triangulator[I]) classifyRing(count uint32, reversed bool) bool {
 		items[found] = item{node.x, node.y, i}
 		slot[i] = found
 		found += uint32(node.reflex)
-		// a ring that turns around once switches the x direction of its edges twice
-		dir := 0
-		if fx > 0 {
-			dir = 1
-		} else if fx < 0 {
-			dir = -1
-		}
-		if dir != 0 && lastDir != 0 && dir != lastDir {
-			turns++
-		}
+		// a ring that turns around once switches the x direction of its edges twice; dir is -1, 0 or 1, so
+		// dir*lastDir < 0 is "both set and different". Branch-free: the direction flips are hard to predict.
+		dir := int(b2u(fx > 0)) - int(b2u(fx < 0))
+		turns += uint32(b2u(dir*lastDir < 0))
 		if firstDir == 0 {
 			firstDir = dir
 		}
@@ -97,8 +91,8 @@ func (t *Triangulator[I]) convexQuad(area float64) bool {
 	if area < 0 {
 		sign = -1.0
 	}
-	return minf(minf(crossN(&n[3], &n[0], &n[1])*sign, crossN(&n[0], &n[1], &n[2])*sign),
-		minf(crossN(&n[1], &n[2], &n[3])*sign, crossN(&n[2], &n[3], &n[0])*sign)) > 0
+	return min4(crossN(&n[3], &n[0], &n[1])*sign, crossN(&n[0], &n[1], &n[2])*sign,
+		crossN(&n[1], &n[2], &n[3])*sign, crossN(&n[2], &n[3], &n[0])*sign) > 0
 }
 
 // A convex ring is one zig-zag strip, wound the way the ring runs.
@@ -144,10 +138,22 @@ func (t *Triangulator[I]) buildIndex() {
 	maxX, maxY := minX, minY
 	for i := uint32(0); i < count; i++ {
 		b := blockers[i]
-		minX = minf(minX, n[b].x)
-		maxX = maxf(maxX, n[b].x)
-		minY = minf(minY, n[b].y)
-		maxY = maxf(maxY, n[b].y)
+		minX = min(minX, n[b].x)
+		maxX = max(maxX, n[b].x)
+		minY = min(minY, n[b].y)
+		maxY = max(maxY, n[b].y)
+	}
+	if minX != minX || maxX != maxX || minY != minY || maxY != maxY {
+		// a NaN: redo it with std::min and std::max, which pass over a NaN in the second argument
+		minX, minY = n[blockers[0]].x, n[blockers[0]].y
+		maxX, maxY = minX, minY
+		for i := uint32(0); i < count; i++ {
+			b := blockers[i]
+			minX = minf(minX, n[b].x)
+			maxX = maxf(maxX, n[b].x)
+			minY = minf(minY, n[b].y)
+			maxY = maxf(maxY, n[b].y)
+		}
 	}
 	t.axisY = maxY-minY > maxX-minX
 	extent := maxX - minX
@@ -216,8 +222,9 @@ func emptyTriangle[I Index](items []item, begin, end uint32, a, b, c *node[I], i
 		s1 := float64(abx*(p.y-ay)) - float64(aby*(p.x-ax))
 		s2 := float64(bcx*(p.y-by)) - float64(bcy*(p.x-bx))
 		s3 := float64(cax*(p.y-cy)) - float64(cay*(p.x-cx))
-		// std::min(std::min(s1, s2), s3) >= 0, which passes over a NaN in s2 or s3 as std::min does
-		hits |= uint32(b2u(s1 >= 0)&b2u(!(s2 < 0))&b2u(!(s3 < 0))&b2u(p.node != ia)&b2u(p.node != ic)) << i
+		// std::min(std::min(s1, s2), s3) >= 0, which passes over a NaN in s2 or s3 as std::min does; i < 32
+		// (smallBlockers), the mask spares the shift its range check
+		hits |= uint32(b2u(s1 >= 0)&b2u(!(s2 < 0))&b2u(!(s3 < 0))&b2u(p.node != ia)&b2u(p.node != ic)) << (uint(i) & 31)
 	}
 	for hits != 0 {
 		p := &items[lowestBit(uint64(hits))]
@@ -234,8 +241,8 @@ func emptyTriangle[I Index](items []item, begin, end uint32, a, b, c *node[I], i
 
 // Bucket variant: a branch-free bounding box pass, then exact tests on the few hits.
 func emptyTriangleBox[I Index](items []item, begin, end uint32, a, b, c *node[I], ia, ic uint32) bool {
-	minX, maxX := minf(a.x, minf(b.x, c.x)), maxf(a.x, maxf(b.x, c.x))
-	minY, maxY := minf(a.y, minf(b.y, c.y)), maxf(a.y, maxf(b.y, c.y))
+	minX, maxX := min3(a.x, b.x, c.x), max3(a.x, b.x, c.x)
+	minY, maxY := min3(a.y, b.y, c.y), max3(a.y, b.y, c.y)
 	for base := begin; base < end; base += 64 {
 		stop := min(end, base+64)
 		mask := uint64(0)
@@ -243,7 +250,7 @@ func emptyTriangleBox[I Index](items []item, begin, end uint32, a, b, c *node[I]
 			p := &items[i]
 			in := uint64(b2u(p.x >= minX) & b2u(p.x <= maxX) & b2u(p.y >= minY) & b2u(p.y <= maxY) &
 				b2u(p.node != ia) & b2u(p.node != ic))
-			mask |= in << (i - base)
+			mask |= in << ((i - base) & 63)
 		}
 		for mask != 0 {
 			p := &items[base+lowestBit(mask)]
@@ -277,21 +284,12 @@ func (t *Triangulator[I]) emptyEar(b *node[I]) bool {
 	}
 	var lo, hi float64
 	if t.axisY {
-		lo, hi = minf(a.y, minf(b.y, c.y)), maxf(a.y, maxf(b.y, c.y))
+		lo, hi = min3(a.y, b.y, c.y), max3(a.y, b.y, c.y)
 	} else {
-		lo, hi = minf(a.x, minf(b.x, c.x)), maxf(a.x, maxf(b.x, c.x))
+		lo, hi = min3(a.x, b.x, c.x), max3(a.x, b.x, c.x)
 	}
 	start := t.bucketStart
 	return emptyTriangleBox(t.items, start[t.bucket(lo)], start[t.bucket(hi)+1], a, b, c, ia, ic)
-}
-
-// Updates the corner flag of node v, dropping it from the blockers once it turns convex.
-func (t *Triangulator[I]) refreshCorner(v, prev, next *node[I], id uint32) {
-	reflex := crossN(prev, v, next) <= 0
-	if v.flag != 0 && !reflex {
-		t.dropBlocker(v, id)
-	}
-	v.reflex = b2u(reflex)
 }
 
 // Removes node id from the blocker index: swapped out of a single bucket, marked gone in several.
@@ -337,8 +335,19 @@ func (t *Triangulator[I]) unlink(v uint32) {
 	na, nc := &n[a], &n[c]
 	na.next = c
 	nc.prev = a
-	t.refreshCorner(na, &n[na.prev], nc, a)
-	t.refreshCorner(nc, na, &n[nc.next], c)
+	// Updates the corner flags of both neighbors, dropping a neighbor from the blockers once it turns convex (the C++
+	// refreshCorner, written out: a call per neighbor costs more than it shares). Dropping one does not change the
+	// other corner.
+	reflexA := crossN(&n[na.prev], na, nc) <= 0
+	reflexC := crossN(na, nc, &n[nc.next]) <= 0
+	if na.flag != 0 && !reflexA {
+		t.dropBlocker(na, a)
+	}
+	na.reflex = b2u(reflexA)
+	if nc.flag != 0 && !reflexC {
+		t.dropBlocker(nc, c)
+	}
+	nc.reflex = b2u(reflexC)
 }
 
 // Drops repeated points and zero-area corners from the boundary through v; returns the vertex count.

@@ -148,6 +148,12 @@ func (p Poly) Y(r, i int) float64 {
 	return float64(p.f.XY[2*(int(p.f.RingPointStart[p.first+uint32(r)])+i)+1])
 }
 
+// RingXY16 returns the x, y pairs of ring r; earstrip reads them in place instead of calling X and Y per point.
+func (p Poly) RingXY16(r int) []int16 {
+	s := p.f.RingPointStart[p.first+uint32(r):]
+	return p.f.XY[2*s[0] : 2*s[1]]
+}
+
 // Points returns the number of points of all rings.
 func (p Poly) Points() int {
 	if p.count == 0 {
