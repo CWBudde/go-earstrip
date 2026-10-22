@@ -280,7 +280,6 @@ func (t *Triangulator[I]) emptyEar(b *node[I]) bool {
 	return emptyTriangleBox(t.items, start[t.bucket(lo)], start[t.bucket(hi)+1], a, b, c, ia, ic)
 }
 
-
 // Removes node id from the blocker index: swapped out of a single bucket, marked gone in several.
 func (t *Triangulator[I]) dropBlocker(v *node[I], id uint32) {
 	v.flag = 0
