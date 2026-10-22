@@ -110,12 +110,21 @@ func (f FlatRings) X(r, i int) float64 { return f.Coords[(f.start(r)+i)*f.dim()]
 func (f FlatRings) Y(r, i int) float64 { return f.Coords[(f.start(r)+i)*f.dim()+1] }
 
 // Run triangulates a polygon given as rings of points, ring 0 the outer ring.
-func (t *Triangulator[I]) Run(polygon [][][2]float64) Status { return t.RunRings(Polygon(polygon)) }
+func (t *Triangulator[I]) Run(polygon [][][2]float64) Status {
+	// passed by a pointer into t: a slice put into an interface would be allocated on every call
+	t.runPolygon = polygon
+	s := t.runRings(&t.runPolygon)
+	t.runPolygon = nil
+	return s
+}
 
 // RunFlat triangulates a polygon given as flat coordinates, dim numbers per vertex (x and y first), and the vertex
 // index where each hole starts.
 func (t *Triangulator[I]) RunFlat(coords []float64, dim int, holeStarts []int) Status {
-	return t.RunRings(FlatRings{Coords: coords, Dim: dim, HoleStarts: holeStarts})
+	t.runFlat = FlatRings{Coords: coords, Dim: dim, HoleStarts: holeStarts}
+	s := t.runRings(&t.runFlat)
+	t.runFlat = FlatRings{}
+	return s
 }
 
 // RunRings triangulates a polygon given through the Rings interface.
