@@ -9,7 +9,7 @@ files=("$@")
 [ ${#files[@]} -eq 0 ] && files=(z13 z9 world gom4old)
 for f in "${files[@]}"; do
 	[ -f "data/$f.bin" ] && continue
-	curl -fL --retry 3 -o "data/$f.bin.tar.xz" "$base/$f.bin.tar.xz"
+	curl -fL --retry 5 --retry-all-errors -C - -o "data/$f.bin.tar.xz" "$base/$f.bin.tar.xz"
 	tar -xJf "data/$f.bin.tar.xz" -C data
 	rm "data/$f.bin.tar.xz"
 done
