@@ -34,7 +34,7 @@ type int128 struct {
 	hi int64
 }
 
-func b2u(b bool) uint64 {
+func b2u64(b bool) uint64 {
 	if b {
 		return 1
 	}
@@ -83,12 +83,12 @@ func (x int128) times(b int64) int128 {
 }
 
 func (x int128) neg() int128 {
-	return int128{lo: 0 - x.lo, hi: int64(^uint64(x.hi) + b2u(x.lo == 0))}
+	return int128{lo: 0 - x.lo, hi: int64(^uint64(x.hi) + b2u64(x.lo == 0))}
 }
 
 func (x int128) add(o int128) int128 {
 	lo := x.lo + o.lo
-	return int128{lo: lo, hi: int64(uint64(x.hi) + uint64(o.hi) + b2u(lo < x.lo))}
+	return int128{lo: lo, hi: int64(uint64(x.hi) + uint64(o.hi) + b2u64(lo < x.lo))}
 }
 
 func (x int128) sub(o int128) int128 { return x.add(o.neg()) }
