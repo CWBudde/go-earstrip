@@ -15,6 +15,7 @@ import (
 
 	"github.com/cwbudde/go-earstrip/internal/cases"
 	"github.com/cwbudde/go-earstrip/internal/oracle"
+	"github.com/cwbudde/go-earstrip/internal/plydata"
 	"github.com/cwbudde/go-earstrip/internal/verify"
 )
 
@@ -187,5 +188,39 @@ func TestOracleConsistency(t *testing.T) {
 				t.Fatalf("%v %d: flat %+v, nested %+v", kind, i, f, a)
 			}
 		}
+	}
+}
+
+// TestOracleData runs the C++ with the default settings over every data file: the invariants hold on every
+// polygon, and the polygons the ears cannot cut exactly (Approximate or Constrained) are as many as BENCHMARKS.md
+// of earstrip counts.
+func TestOracleData(t *testing.T) {
+	hard := map[string]int{"z13.bin": 82, "z9.bin": 183, "gom4old.bin": 1468, "world.bin": -1}
+	for _, name := range plydata.Files {
+		t.Run(name, func(t *testing.T) {
+			f := loadData(t, name)
+			n := limit(f.Len(), name == "z13.bin")
+			o := oracle.New()
+			defer o.Close()
+			var statuses [5]int
+			failed := 0
+			for i := range n {
+				poly := f.Polygon(i).Nested()
+				r := o.Run(poly, oracle.Options{})
+				statuses[r.Status]++
+				if err := verify.Invariants(toInt(poly), r.Status, true, r.Strips, r.Ends, r.CW, r.Extra); err != nil {
+					failed++
+					if failed <= 10 {
+						t.Errorf("polygon %d: %v", i, err)
+					}
+				}
+			}
+			t.Logf("%d polygons: exact %d, holes left out %d, approximate %d, constrained %d", n, statuses[oracle.Exact],
+				statuses[oracle.HolesLeftOut], statuses[oracle.Approximate], statuses[oracle.Constrained])
+			if want := hard[name]; want >= 0 && n == f.Len() && statuses[oracle.Approximate]+statuses[oracle.Constrained] != want {
+				t.Errorf("%d polygons the ears cannot cut exactly, BENCHMARKS.md says %d",
+					statuses[oracle.Approximate]+statuses[oracle.Constrained], want)
+			}
+		})
 	}
 }
