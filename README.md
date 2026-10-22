@@ -2,6 +2,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/cwbudde/go-earstrip.svg)](https://pkg.go.dev/github.com/cwbudde/go-earstrip)
 [![CI](https://github.com/CWBudde/go-earstrip/actions/workflows/ci.yml/badge.svg)](https://github.com/CWBudde/go-earstrip/actions/workflows/ci.yml)
+[![Demo](https://img.shields.io/badge/demo-live-blue)](https://cwbudde.github.io/go-earstrip/)
 
 Polygon triangulation for map data, in pure Go. A port of [earstrip](https://github.com/GLMap/earstrip) by Evgen
 Bodunov, the triangulator of the [GLMap](https://globus.software) map engine.
@@ -14,6 +15,9 @@ behind it are told step by step in
 
 The port is **bit-exact**: for every polygon it writes the same strips, strip ends, orientations, status and added
 points as the C++ header (see [Testing](#testing)).
+
+**[Live demo](https://cwbudde.github.io/go-earstrip/)**: draw or edit a polygon and watch it triangulated in the
+browser, by the Go code compiled to WebAssembly (see [Web demo](#web-demo)).
 
 ## Install
 
