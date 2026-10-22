@@ -238,7 +238,7 @@ func emptyTriangleBox[I Index](items []item, begin, end uint32, a, b, c *node[I]
 			p := &items[i]
 			in := uint64(b2u(p.x >= minX) & b2u(p.x <= maxX) & b2u(p.y >= minY) & b2u(p.y <= maxY) &
 				b2u(p.node != ia) & b2u(p.node != ic))
-			mask |= in << (i - base)
+			mask |= in << ((i - base) & 63)
 		}
 		for mask != 0 {
 			p := &items[base+lowestBit(mask)]
