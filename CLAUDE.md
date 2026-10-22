@@ -22,6 +22,9 @@ just fetch-data           # benchmark polygons into data/ (gh, else curl; not co
 just conformance          # hash-exact check against the C++ results stored in z13.bin / z9.bin
 just fuzz [time]          # FuzzInvariants; `just fuzz-diff` fuzzes Go against the C++
 just bench-file data/z13.bin -r 7 --check
+just dev-demo             # browser demo: cmd/demo as js/wasm + Vite dev server; `just build-demo` for web/dist
+just lint-wasm            # golangci-lint for GOOS=js (cmd/demo is invisible to plain `just lint`)
+just lint-web             # eslint + tsc for web/
 ```
 
 Single test: `go test -run 'TestName/subtest' .` (oracle tests: add `-tags earstrip_cgo ./internal/oracle/`).
@@ -66,6 +69,10 @@ Internal packages (test support only):
   oracle tests.
 - `internal/plydata`: reader for the PLY1 benchmark files and the FNV-1a result hash of `bench/bench.cpp`.
 - `cmd/earstrip-bench`: Go counterpart of `bench/bench.cpp`.
+- `internal/demo` + `cmd/demo`: the browser demo. `internal/demo` holds presets, generators and a reused
+  `Triangulator` (native, tested); `cmd/demo` (`_js.go` files, js/wasm only) publishes it as `globalThis.earstrip`.
+  `web/` is the Vite/React/shadcn front end (its own `go.mod` keeps `./...` out of `node_modules`), deployed to
+  GitHub Pages by `.github/workflows/pages.yml`.
 
 ## Rules for keeping it bit-exact
 

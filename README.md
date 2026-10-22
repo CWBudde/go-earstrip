@@ -52,6 +52,19 @@ t.Restart(nil, 0xFFFFFFFF) // one index buffer for TRIANGLE_STRIP with primitive
 - A `Triangulator` is not safe for concurrent use; use one per goroutine. The returned slices alias its buffers and
   stay valid until the next run. `Shrink()` gives the memory back.
 
+## Web demo
+
+[**Try it in the browser**](https://cwbudde.github.io/go-earstrip/): the library compiled to WebAssembly. Pick one of
+the cases of earstrip's `test.cpp` or a random polygon, drag, add and delete vertices or draw rings and holes, and
+watch the strips, the status and the extra points change; the triangles can be stepped through in output order.
+
+```sh
+just dev-demo     # cmd/demo as js/wasm, then Vite's dev server at http://localhost:5173/go-earstrip/
+just build-demo   # the static site in web/dist (needs Node.js 22)
+```
+
+`cmd/demo` is the js/wasm entry point, `internal/demo` what it computes, `web/` the React front end.
+
 ## Polygons that are not simple
 
 `Run` reports how a polygon was covered:

@@ -7,3 +7,9 @@ coverage.html
 .DS_Store
 .claude/
 /bin/
+
+# Web demo: dependencies, build output, and the wasm files just build-demo copies in
+web/node_modules/
+web/dist/
+web/public/demo.wasm
+web/public/wasm_exec.js
