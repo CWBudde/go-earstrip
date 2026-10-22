@@ -105,6 +105,31 @@ func maxf(a, b float64) float64 {
 	return a
 }
 
+// min3, max3 and min4 are the nested std::min and std::max of three or four values, with the builtins' single
+// instructions instead of the compare-and-branch minf and maxf make (the branches mispredict on random input).
+// Without a NaN they are the same up to the sign of a zero, which no caller can tell; with one, the result is NaN
+// and the nested calls decide.
+func min3(a, b, c float64) float64 {
+	if m := min(a, b, c); m == m {
+		return m
+	}
+	return minf(a, minf(b, c))
+}
+
+func max3(a, b, c float64) float64 {
+	if m := max(a, b, c); m == m {
+		return m
+	}
+	return maxf(a, maxf(b, c))
+}
+
+func min4(a, b, c, d float64) float64 {
+	if m := min(a, b, c, d); m == m {
+		return m
+	}
+	return minf(minf(a, b), minf(c, d))
+}
+
 func b2u(b bool) uint8 {
 	if b {
 		return 1

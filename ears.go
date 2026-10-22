@@ -91,8 +91,8 @@ func (t *Triangulator[I]) convexQuad(area float64) bool {
 	if area < 0 {
 		sign = -1.0
 	}
-	return minf(minf(crossN(&n[3], &n[0], &n[1])*sign, crossN(&n[0], &n[1], &n[2])*sign),
-		minf(crossN(&n[1], &n[2], &n[3])*sign, crossN(&n[2], &n[3], &n[0])*sign)) > 0
+	return min4(crossN(&n[3], &n[0], &n[1])*sign, crossN(&n[0], &n[1], &n[2])*sign,
+		crossN(&n[1], &n[2], &n[3])*sign, crossN(&n[2], &n[3], &n[0])*sign) > 0
 }
 
 // A convex ring is one zig-zag strip, wound the way the ring runs.
@@ -138,10 +138,22 @@ func (t *Triangulator[I]) buildIndex() {
 	maxX, maxY := minX, minY
 	for i := uint32(0); i < count; i++ {
 		b := blockers[i]
-		minX = minf(minX, n[b].x)
-		maxX = maxf(maxX, n[b].x)
-		minY = minf(minY, n[b].y)
-		maxY = maxf(maxY, n[b].y)
+		minX = min(minX, n[b].x)
+		maxX = max(maxX, n[b].x)
+		minY = min(minY, n[b].y)
+		maxY = max(maxY, n[b].y)
+	}
+	if minX != minX || maxX != maxX || minY != minY || maxY != maxY {
+		// a NaN: redo it with std::min and std::max, which pass over a NaN in the second argument
+		minX, minY = n[blockers[0]].x, n[blockers[0]].y
+		maxX, maxY = minX, minY
+		for i := uint32(0); i < count; i++ {
+			b := blockers[i]
+			minX = minf(minX, n[b].x)
+			maxX = maxf(maxX, n[b].x)
+			minY = minf(minY, n[b].y)
+			maxY = maxf(maxY, n[b].y)
+		}
 	}
 	t.axisY = maxY-minY > maxX-minX
 	extent := maxX - minX
@@ -229,8 +241,8 @@ func emptyTriangle[I Index](items []item, begin, end uint32, a, b, c *node[I], i
 
 // Bucket variant: a branch-free bounding box pass, then exact tests on the few hits.
 func emptyTriangleBox[I Index](items []item, begin, end uint32, a, b, c *node[I], ia, ic uint32) bool {
-	minX, maxX := minf(a.x, minf(b.x, c.x)), maxf(a.x, maxf(b.x, c.x))
-	minY, maxY := minf(a.y, minf(b.y, c.y)), maxf(a.y, maxf(b.y, c.y))
+	minX, maxX := min3(a.x, b.x, c.x), max3(a.x, b.x, c.x)
+	minY, maxY := min3(a.y, b.y, c.y), max3(a.y, b.y, c.y)
 	for base := begin; base < end; base += 64 {
 		stop := min(end, base+64)
 		mask := uint64(0)
@@ -272,9 +284,9 @@ func (t *Triangulator[I]) emptyEar(b *node[I]) bool {
 	}
 	var lo, hi float64
 	if t.axisY {
-		lo, hi = minf(a.y, minf(b.y, c.y)), maxf(a.y, maxf(b.y, c.y))
+		lo, hi = min3(a.y, b.y, c.y), max3(a.y, b.y, c.y)
 	} else {
-		lo, hi = minf(a.x, minf(b.x, c.x)), maxf(a.x, maxf(b.x, c.x))
+		lo, hi = min3(a.x, b.x, c.x), max3(a.x, b.x, c.x)
 	}
 	start := t.bucketStart
 	return emptyTriangleBox(t.items, start[t.bucket(lo)], start[t.bucket(hi)+1], a, b, c, ia, ic)
