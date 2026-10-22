@@ -39,16 +39,10 @@ func (t *Triangulator[I]) classifyRing(count uint32, reversed bool) bool {
 		items[found] = item{node.x, node.y, i}
 		slot[i] = found
 		found += uint32(node.reflex)
-		// a ring that turns around once switches the x direction of its edges twice
-		dir := 0
-		if fx > 0 {
-			dir = 1
-		} else if fx < 0 {
-			dir = -1
-		}
-		if dir != 0 && lastDir != 0 && dir != lastDir {
-			turns++
-		}
+		// a ring that turns around once switches the x direction of its edges twice; dir is -1, 0 or 1, so
+		// dir*lastDir < 0 is "both set and different". Branch-free: the direction flips are hard to predict.
+		dir := int(b2u(fx > 0)) - int(b2u(fx < 0))
+		turns += uint32(b2u(dir*lastDir < 0))
 		if firstDir == 0 {
 			firstDir = dir
 		}
@@ -216,8 +210,9 @@ func emptyTriangle[I Index](items []item, begin, end uint32, a, b, c *node[I], i
 		s1 := float64(abx*(p.y-ay)) - float64(aby*(p.x-ax))
 		s2 := float64(bcx*(p.y-by)) - float64(bcy*(p.x-bx))
 		s3 := float64(cax*(p.y-cy)) - float64(cay*(p.x-cx))
-		// std::min(std::min(s1, s2), s3) >= 0, which passes over a NaN in s2 or s3 as std::min does
-		hits |= uint32(b2u(s1 >= 0)&b2u(!(s2 < 0))&b2u(!(s3 < 0))&b2u(p.node != ia)&b2u(p.node != ic)) << i
+		// std::min(std::min(s1, s2), s3) >= 0, which passes over a NaN in s2 or s3 as std::min does; i < 32
+		// (smallBlockers), the mask spares the shift its range check
+		hits |= uint32(b2u(s1 >= 0)&b2u(!(s2 < 0))&b2u(!(s3 < 0))&b2u(p.node != ia)&b2u(p.node != ic)) << (uint(i) & 31)
 	}
 	for hits != 0 {
 		p := &items[lowestBit(uint64(hits))]

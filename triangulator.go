@@ -305,13 +305,15 @@ func (t *Triangulator[I]) loadRing(rings Rings, r, first, indexBase uint32) (cou
 	// the package's own ring types skip the interface for every point; the result is the same
 	switch p := rings.(type) {
 	case *Polygon:
-		return t.loadStrided(flatten((*p)[r]), 2, first, indexBase)
+		return loadStrided(t.nodes, flatten((*p)[r]), 2, first, indexBase)
 	case Polygon:
-		return t.loadStrided(flatten(p[r]), 2, first, indexBase)
+		return loadStrided(t.nodes, flatten(p[r]), 2, first, indexBase)
+	case int16Rings:
+		return loadStrided(t.nodes, p.RingXY16(int(r)), 2, first, indexBase)
 	case *FlatRings:
-		return t.loadStrided(flatRing(p, int(r)), p.dim(), first, indexBase)
+		return loadStrided(t.nodes, flatRing(p, int(r)), p.dim(), first, indexBase)
 	case FlatRings:
-		return t.loadStrided(flatRing(&p, int(r)), p.dim(), first, indexBase)
+		return loadStrided(t.nodes, flatRing(&p, int(r)), p.dim(), first, indexBase)
 	}
 	n := t.nodes[first:]
 	size := uint32(rings.Size(int(r)))
@@ -357,15 +359,22 @@ func (t *Triangulator[I]) loadRing(rings Rings, r, first, indexBase uint32) (cou
 	return count, area, rightmost
 }
 
+// int16Rings is implemented by rings stored as int16 x, y pairs (the benchmark files): they are read in place,
+// as the C++ benchmark reads its own int16 points, instead of one interface call per coordinate.
+type int16Rings interface {
+	Rings
+	RingXY16(r int) []int16
+}
+
 // loadStrided is loadRing for a ring given as coordinates, x and y first in every stride numbers.
-func (t *Triangulator[I]) loadStrided(coords []float64, stride int, first, indexBase uint32) (count uint32, area float64, rightmost uint32) {
-	n := t.nodes[first:]
+func loadStrided[I Index, C float64 | int16](nodes []node[I], coords []C, stride int, first, indexBase uint32) (count uint32, area float64, rightmost uint32) {
+	n := nodes[first:]
 	size := uint32(len(coords) / stride)
 	if size < 3 {
 		return 0, 0, 0
 	}
 	n = n[:size]
-	lastX, lastY := coords[0], coords[1]
+	lastX, lastY := float64(coords[0]), float64(coords[1])
 	sum, rightX := 0.0, lastX
 	n[0].x = lastX
 	n[0].y = lastY
@@ -373,7 +382,7 @@ func (t *Triangulator[I]) loadStrided(coords []float64, stride int, first, index
 	count = 1
 	right := uint32(0)
 	for i, k := uint32(1), stride; i < size; i, k = i+1, k+stride {
-		x, y := coords[k], coords[k+1]
+		x, y := float64(coords[k]), float64(coords[k+1])
 		node := &n[count]
 		node.x = x
 		node.y = y
