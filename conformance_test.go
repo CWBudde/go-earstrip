@@ -1,6 +1,7 @@
 package earstrip_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/cwbudde/go-earstrip"
@@ -73,6 +74,9 @@ func loadData(tb testing.TB, name string) *plydata.File {
 	tb.Helper()
 	path, ok := plydata.Path(name)
 	if !ok {
+		if os.Getenv("EARSTRIP_REQUIRE_DATA") != "" {
+			tb.Fatalf("%s not found and EARSTRIP_REQUIRE_DATA is set", name)
+		}
 		tb.Skipf("%s not found (run `just fetch-data` or set EARSTRIP_DATA)", name)
 	}
 	f, err := plydata.Load(path)

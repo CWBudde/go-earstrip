@@ -9,9 +9,9 @@ files=("$@")
 [ ${#files[@]} -eq 0 ] && files=(z13 z9 world gom4old)
 for f in "${files[@]}"; do
 	[ -f "data/$f.bin" ] && continue
-	if command -v gh >/dev/null 2>&1; then
-		gh release download bench-data-1 -R GLMap/earstrip -p "$f.bin.tar.xz" -D data --clobber
-	else
+	# gh is often much faster than the plain download; it needs a login, so curl is the fallback
+	if ! { command -v gh >/dev/null 2>&1 &&
+		gh release download bench-data-1 -R GLMap/earstrip -p "$f.bin.tar.xz" -D data --clobber; }; then
 		curl -fL --retry 5 --retry-all-errors -C - -o "data/$f.bin.tar.xz" "$base/$f.bin.tar.xz"
 	fi
 	tar -xJf "data/$f.bin.tar.xz" -C data

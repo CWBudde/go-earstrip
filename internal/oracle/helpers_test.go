@@ -3,6 +3,7 @@
 package oracle_test
 
 import (
+	"os"
 	"sync"
 	"testing"
 
@@ -27,6 +28,9 @@ func loadData(t testing.TB, name string) *plydata.File {
 	}
 	path, ok := plydata.Path(name)
 	if !ok {
+		if os.Getenv("EARSTRIP_REQUIRE_DATA") != "" {
+			t.Fatalf("%s not found and EARSTRIP_REQUIRE_DATA is set", name)
+		}
 		t.Skipf("%s not found (run `just fetch-data` or set EARSTRIP_DATA)", name)
 	}
 	f, err := plydata.Load(path)

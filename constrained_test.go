@@ -6,6 +6,7 @@ package earstrip_test
 import (
 	"math"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/cwbudde/go-earstrip"
@@ -158,7 +159,8 @@ func TestConstrained(t *testing.T) {
 			}
 		}
 	})
-	// more points than uint16 can index: the constrained triangulation stays out
+	// more points than uint16 can index: the C++ keeps the constrained triangulation out and lets the ears' indices
+	// wrap; the Go port refuses the input instead (the constrained limit itself is tested in constrained_internal_test.go)
 	t.Run("past the index range", func(t *testing.T) {
 		big := [][][2]float64{nil}
 		for k := range 70000 {
@@ -167,12 +169,9 @@ func TestConstrained(t *testing.T) {
 		}
 		big[0] = append(big[0], [2]float64{0, 0}, [2]float64{2e6, 1})
 		var tr earstrip.Triangulator[uint16]
-		var s earstrip.Status
-		if err := protect(func() { s = tr.Run(big) }); err != nil {
-			t.Fatal(err)
-		}
-		if s == earstrip.Constrained || len(tr.ExtraPoints()) != 0 {
-			t.Errorf("status %v, %d added points", s, len(tr.ExtraPoints())/2)
+		err := protect(func() { tr.Run(big) })
+		if err == nil || !strings.Contains(err.Error(), "do not fit the index type") {
+			t.Errorf("want a panic about the index type, got %v", err)
 		}
 	})
 	// Shrink frees the buffers and keeps the settings: the same polygon gives the same result again

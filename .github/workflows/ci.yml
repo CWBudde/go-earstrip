@@ -5,25 +5,36 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
+        go: ["1.24", stable]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: stable
+          go-version: ${{ matrix.go }}
       - run: go vet ./...
       - run: go vet -tags earstrip_cgo ./...
       - run: go test ./...
+      - run: go test -race -short ./...
       - name: Differential tests against the C++ header
         run: go test -tags earstrip_cgo -short ./internal/oracle/...
 
   conformance:
     runs-on: ubuntu-latest
+    env:
+      EARSTRIP_REQUIRE_DATA: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -34,6 +45,8 @@ jobs:
           path: data
           key: bench-data-1
       - run: ./scripts/fetch-data.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: go test -run TestConformance -v -timeout 30m .
       - name: The C++ against the stored hashes, then go-earstrip against the C++ on every data file
         run: go test -tags earstrip_cgo -timeout 60m ./internal/oracle/...
@@ -47,4 +60,6 @@ jobs:
           go-version: stable
       - uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.13.2
+      - name: Lint with the cgo oracle
+        run: golangci-lint run --build-tags earstrip_cgo ./...
