@@ -485,8 +485,8 @@ export function Benchmark({
               <CardDescription>
                 Pick the polygons and press Run. The page stays usable between
                 measurements but holds still during each one. At 100,000
-                vertices a single run can take seconds: all three slow down
-                faster than linearly on large rings.
+                vertices a single run of libtess can take seconds: it slows
+                down faster than linearly on large rings.
               </CardDescription>
             </CardHeader>
           </Card>

@@ -50,9 +50,13 @@ All of the library is in package `earstrip` at the root. Files map to parts of `
   forced cuts give `Approximate`.
 - `ears.go`: ring classification, the spatial index of reflex "blocker" vertices, ear tests and clipping into
   zig-zag strips.
-- `holes.go`: bridging holes into the outer ring and joining rings that touch. `cxxSort` copies libc++'s
-  `std::sort` step by step so that ties in the hole order match a clang/libc++ build. Do not replace it with
-  `sort`/`slices`.
+- `earindex.go`: not in the C++. A kd tree over the blockers that answers large ear tests (a bucket slab of more
+  than 64 items) with the same bool as the slab scan, built lazily; it makes large rings near-linear instead of
+  quadratic. `checkEarIndex` (set by `earindex_test.go`) compares both answers on every call.
+- `holes.go`: bridging holes into the outer ring and joining rings that touch. `bridge` skips blocks of nodes whose
+  bounds rule them out (`bridgeBlock`, not in the C++) and scans the rest in the C++ order. `cxxSort` copies
+  libc++'s `std::sort` step by step so that ties in the hole order match a clang/libc++ build. Do not replace it
+  with `sort`/`slices`.
 - `recover.go`: what happens when the ears run out on non-simple boundaries: finding crossings, splitting
   loops/lobes, forced cuts.
 - `constrained.go` + `constrained_mesh.go`: port of `detail::Constrained<Index>`, the constrained Delaunay
@@ -88,3 +92,6 @@ Internal packages (test support only):
 - Hot paths must not allocate once the buffers have grown. Buffers are reused through `grow`/`assign` and sliced to
   `[:0]`, never reallocated per run.
 - A comment in a ported function usually copies the C++ comment. Keep them in sync with the header.
+- A speed-up the C++ does not have (the kd tree, the bridge blocks, the radix sort in `constrained.go`) must give
+  provably the same answer, not just a valid one; its comment states why. `TestDifferentialWorkloads` (large
+  rings up to 100,000 vertices against the C++) and `TestDifferentialBridgeTies` guard them.

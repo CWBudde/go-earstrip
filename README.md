@@ -101,11 +101,18 @@ measured with `go run ./cmd/earstrip-bench data/<file> -r 7` and the C++ `bench/
 | --- | ---: | ---: | ---: |
 | Masovian Voivodeship, zoom 13 (`z13.bin`) | 3,740,425 | 686 ms | 447 ms |
 | the same at zoom 9 (`z9.bin`) | 683,742 | 93 ms | 65 ms |
-| world map tiles, up to 11,675 holes in one (`world.bin`) | 56,472 | 662 ms | 432 ms |
+| world map tiles, up to 11,675 holes in one (`world.bin`) | 56,472 | 530 ms | 432 ms |
 | an older build with crossing rings (`gom4old.bin`) | 1,212,030 | 564 ms | 378 ms |
 
-The Go port runs at about two thirds of the C++ speed. For comparison, the C++ earstrip is 13% faster than
-earcut.hpp on `z13.bin`.
+On these files the Go port runs at about two thirds of the C++ speed (four fifths on `world.bin`). For
+comparison, the C++ earstrip is 13% faster than earcut.hpp on `z13.bin`.
+
+Large rings are another matter. The C++ tests each ear against a slab of its spatial index that spans one axis,
+and the zig-zag strips of a large ring cut long thin ears whose slab holds much of the ring, so the time grows
+with the square of the vertices: 1.15 s for a smooth ring of 100,000 vertices. go-earstrip answers these tests
+from a kd tree instead, and bridges holes and sorts the constrained triangulation's vertices with faster
+structures, each giving exactly the answer of the C++ code it replaces. The same ring takes 23 ms
+(`go test ./internal/demo -bench Workloads` times the demo's polygon families from 1,000 to 100,000 vertices).
 
 A reused `Triangulator` allocates nothing once it has seen the largest polygon.
 
