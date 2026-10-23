@@ -56,6 +56,26 @@ t.Restart(nil, 0xFFFFFFFF) // one index buffer for TRIANGLE_STRIP with primitive
 - A `Triangulator` is not safe for concurrent use; use one per goroutine. The returned slices alias its buffers and
   stay valid until the next run. `Shrink()` gives the memory back.
 
+## Compared with earcut
+
+[earcut](https://github.com/mapbox/earcut) and its ports are the usual choice for polygon triangulation. What
+go-earstrip does differently:
+
+- **Strips, not a list**: about 1.7 indices per triangle (1.66 on `z13.bin`) instead of 3, or one restart index
+  buffer for a single `TRIANGLE_STRIP` draw call (about 2 per triangle there). A triangle list is still one call
+  away.
+- **Broken input is covered, and says so**: map polygons rounded to a tile grid often have rings that touch or
+  cross. earcut patches what it can and cannot tell you whether its triangles still cover the polygon; go-earstrip
+  reports it (`Status`) and covers the polygon with a constrained Delaunay triangulation by the non-zero winding
+  rule.
+- **Large rings stay fast**: a smooth ring of 100,000 vertices takes 23 ms, the time growing close to linearly (see
+  [Performance](#performance)).
+- **A drop-in for earcut**: `earstrip.Earcut(coords, holeIndices, dim)` takes and returns what earcut does.
+- **Checked against the C++ original**: bit-exact on 4.4 million real map polygons.
+
+The [Performance tab](https://cwbudde.github.io/go-earstrip/#performance) of the demo times both, and libtess.js,
+on the same polygons in your browser.
+
 ## Web demo
 
 [**Try it in the browser**](https://cwbudde.github.io/go-earstrip/): the library compiled to WebAssembly. Pick one of
