@@ -27,9 +27,10 @@ type Triangulator[I Index] struct {
 	bucketScale  float64
 	buckets      uint32 // 0 is read as 1, see ears.go
 	axisY        bool
-	live         uint32 // blockers still reflex
-	built        uint32 // items in the index when it was built
-	blockerCount uint32 // blockers found by the last classification
+	live         uint32   // blockers still reflex
+	built        uint32   // items in the index when it was built
+	blockerCount uint32   // blockers found by the last classification
+	ears         earIndex // kd tree over the items for large ear tests, see earindex.go
 	droppedHoles bool
 	outerCount   uint32
 	forced       bool // a forced cut was made or the boundary untangled
