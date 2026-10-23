@@ -215,6 +215,8 @@ type constrained[I Index] struct {
 	twin          []uint32
 	wind          []wind
 	segments      []segment
+	radix         []radixPair // buffers of radixSort, Go only
+	radixTmp      []radixPair
 	pending       []pending
 	crossed       []edgePair
 	stack         []uint32
@@ -513,12 +515,67 @@ func sortItemCompare(a, b sortItem) int {
 	return cmp.Compare(a.index, b.index)
 }
 
+// From this many items on, sortVertices and collectSegments use radixSort. Any correct sort gives the same result,
+// so this is a matter of speed only.
+const radixMin = 256
+
+// radixPair is a key with a payload for radixSort.
+type radixPair struct {
+	key, val uint64
+}
+
+// radixSort sorts a by key, stably, moving the pairs between a and tmp (of the same length); it returns the one that
+// holds the result. It sorts by the bytes of the key from the lowest and skips a byte that all keys share.
+func radixSort(a, tmp []radixPair) []radixPair {
+	if len(a) == 0 {
+		return a
+	}
+	tmp = tmp[:len(a)]
+	var counts [8][256]uint32
+	for i := range a {
+		k := a[i].key
+		for d := range counts {
+			counts[d][byte(k>>(8*d))]++
+		}
+	}
+	n := uint32(len(a))
+	for d := range counts {
+		count := &counts[d]
+		shift := 8 * uint(d)
+		if count[byte(a[0].key>>shift)] == n {
+			continue
+		}
+		sum := uint32(0)
+		for b, k := range count {
+			count[b] = sum
+			sum += k
+		}
+		for _, p := range a {
+			b := byte(p.key >> shift)
+			tmp[count[b]] = p
+			count[b]++
+		}
+		a, tmp = tmp, a
+	}
+	return a
+}
+
+// radixBuffers returns the two buffers of radixSort with n pairs each.
+func (c *constrained[I]) radixBuffers(n uint32) ([]radixPair, []radixPair) {
+	if uint32(len(c.radix)) < n {
+		c.radix = cdtResize(c.radix, int(n))
+		c.radixTmp = cdtResize(c.radixTmp, int(n))
+	}
+	return c.radix[:n], c.radixTmp[:n]
+}
+
 // sortVertices sorts the points by x, then y, and merges equal ones into vertices; a vertex keeps the last index of
 // its point.
 func (c *constrained[I]) sortVertices() {
 	n := c.pointCount
 	items := c.sorted[:n]
-	if n <= 32 {
+	switch {
+	case n <= 32:
 		for i := uint32(1); i < n; i++ {
 			item := items[i]
 			j := i
@@ -527,8 +584,10 @@ func (c *constrained[I]) sortVertices() {
 			}
 			items[j] = item
 		}
-	} else {
+	case n < radixMin:
 		slices.SortFunc(items, sortItemCompare)
+	default:
+		c.radixSortItems(items)
 	}
 	c.reserveVertices(n)
 	if uint32(len(c.vertexOf)) < n {
@@ -549,6 +608,31 @@ func (c *constrained[I]) sortVertices() {
 		i = j + 1
 	}
 	c.vertexCount, c.inputVertices = count, count
+}
+
+// radixSortItems sorts the items in the order of sortItemLess. The key x - minX, y - minY orders as x, then y (both
+// spans fit 32 bits: the coordinates are integers of 32 bits or on the grid), and toGrid wrote the items in the
+// order of their indices, which the stable sort keeps for equal points.
+func (c *constrained[I]) radixSortItems(items []sortItem) {
+	minX, minY := items[0].x, items[0].y
+	maxX, maxY := minX, minY
+	for i := range items {
+		minX = min(minX, items[i].x)
+		maxX = max(maxX, items[i].x)
+		minY = min(minY, items[i].y)
+		maxY = max(maxY, items[i].y)
+	}
+	shift := uint(bits.Len64(uint64(maxY - minY)))
+	mask := uint64(1)<<shift - 1
+	pairs, tmp := c.radixBuffers(uint32(len(items)))
+	for i := range items {
+		pairs[i] = radixPair{uint64(items[i].x-minX)<<shift | uint64(items[i].y-minY), uint64(items[i].index)}
+	}
+	pairs = radixSort(pairs, tmp)
+	for i := range items {
+		p := pairs[i]
+		items[i] = sortItem{minX + int64(p.key>>shift), minY + int64(p.key&mask), uint32(p.val)}
+	}
 }
 
 // reserveVertices grows the vertex arrays to count vertices and the half-edges to 2 * count triangles.
@@ -611,7 +695,8 @@ func (c *constrained[I]) collectSegments() bool {
 	}
 	s := c.segments
 	n := uint32(len(s))
-	if n <= 32 {
+	switch {
+	case n <= 32:
 		for i := uint32(1); i < n; i++ {
 			item := s[i]
 			j := i
@@ -620,8 +705,18 @@ func (c *constrained[I]) collectSegments() bool {
 			}
 			s[j] = item
 		}
-	} else {
+	case n < radixMin:
 		slices.SortFunc(s, segmentCompare)
+	default:
+		// The order of equal keys may differ from std::sort's, but the merge below only adds their windings.
+		pairs, tmp := c.radixBuffers(n)
+		for i := range s {
+			pairs[i] = radixPair{s[i].key, uint64(uint32(s[i].wind.outer))<<32 | uint64(uint32(s[i].wind.holes))}
+		}
+		pairs = radixSort(pairs, tmp)
+		for i := range s {
+			s[i] = segment{pairs[i].key, wind{int32(pairs[i].val >> 32), int32(uint32(pairs[i].val))}}
+		}
 	}
 	kept := uint32(0)
 	for i := uint32(0); i < n; {
@@ -700,6 +795,11 @@ func (c *constrained[I]) inCircle(ia, ib, ic, id uint32) bool {
 	cl := float64(cdx*cdx) + float64(cdy*cdy)
 	det := float64(al*(float64(bdx*cdy)-float64(bdy*cdx))) + float64(bl*(float64(cdx*ady)-float64(cdy*adx))) +
 		float64(cl*(float64(adx*bdy)-float64(ady*bdx)))
+	// The bound is a sum of products of non-negative finite numbers, so bound * 1e-14 >= 0: without a positive det
+	// the test below fails anyway, and the bound need not be computed.
+	if !(det > 0) {
+		return false
+	}
 	bound := float64(al*(math.Abs(float64(bdx*cdy))+math.Abs(float64(bdy*cdx)))) +
 		float64(bl*(math.Abs(float64(cdx*ady))+math.Abs(float64(cdy*adx)))) +
 		float64(cl*(math.Abs(float64(adx*bdy))+math.Abs(float64(ady*bdx))))

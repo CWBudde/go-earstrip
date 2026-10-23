@@ -3,6 +3,7 @@ package earstrip
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -359,7 +361,9 @@ func slicesSortByAngle(ring [][2]float64) {
 // TestConstrainedNoAlloc checks that a reused instance does not allocate in steady state.
 func TestConstrainedNoAlloc(t *testing.T) {
 	rng := rand.New(rand.NewPCG(5, 6))
-	poly := Polygon{randomRing(rng, 60, 1000, true), starRing(rng, 20, 300, 300, 50, 200, true)}
+	// more than radixMin points, so that the radix sorts run
+	poly := Polygon{randomRing(rng, 60, 1000, true), starRing(rng, 20, 300, 300, 50, 200, true),
+		starRing(rng, radixMin, 700, 700, 50, 200, true)}
 	var c constrained[uint32]
 	var extra []float64
 	var rings Rings = poly // the conversion to the interface allocates
@@ -928,5 +932,123 @@ func TestConstrainedLimitsAndCloser(t *testing.T) {
 	}
 	if c.closer(nil, nil, 150) {
 		t.Error("empty strips closer to an area of 150")
+	}
+}
+
+// ---------- Go-only speed-ups ----------
+
+func TestEdgeSteps(t *testing.T) {
+	check := func(e uint32) {
+		next, prev := e+1, e-1
+		if e%3 == 2 {
+			next = e - 2
+		}
+		if e%3 == 0 {
+			prev = e + 2
+		}
+		if got := nextEdge(e); got != next {
+			t.Fatalf("nextEdge(%d) = %d, want %d", e, got, next)
+		}
+		if got := prevEdge(e); got != prev {
+			t.Fatalf("prevEdge(%d) = %d, want %d", e, got, prev)
+		}
+	}
+	for e := uint32(0); e < 1<<22; e++ {
+		check(e)
+		check(math.MaxUint32 - e)
+	}
+	rng := rand.New(rand.NewPCG(11, 12))
+	for range 1 << 22 {
+		check(rng.Uint32())
+	}
+}
+
+// inCircleCxx is the C++ inCircle as it is, without the early return of inCircle.
+func inCircleCxx(a, b, cc, d cdtVertex) bool {
+	adx, ady, bdx, bdy := float64(a.x-d.x), float64(a.y-d.y), float64(b.x-d.x), float64(b.y-d.y)
+	cdx, cdy := float64(cc.x-d.x), float64(cc.y-d.y)
+	al := float64(adx*adx) + float64(ady*ady)
+	bl := float64(bdx*bdx) + float64(bdy*bdy)
+	cl := float64(cdx*cdx) + float64(cdy*cdy)
+	det := float64(al*(float64(bdx*cdy)-float64(bdy*cdx))) + float64(bl*(float64(cdx*ady)-float64(cdy*adx))) +
+		float64(cl*(float64(adx*bdy)-float64(ady*bdx)))
+	bound := float64(al*(math.Abs(float64(bdx*cdy))+math.Abs(float64(bdy*cdx)))) +
+		float64(bl*(math.Abs(float64(cdx*ady))+math.Abs(float64(cdy*adx)))) +
+		float64(cl*(math.Abs(float64(adx*bdy))+math.Abs(float64(ady*bdx))))
+	return det > bound*1e-14
+}
+
+func TestInCircleEarlyReturn(t *testing.T) {
+	rng := rand.New(rand.NewPCG(13, 14))
+	for _, span := range []int64{1 << 15, 1 << 20, gridSize, math.MaxInt32, 1 << 32} {
+		c := &constrained[uint32]{wide: span > math.MaxInt32}
+		c.vertices = make([]cdtVertex, 4)
+		coord := func() int64 { return rng.Int64N(span+1) - span/2 }
+		for i := 0; i < 200000; i++ {
+			for k := range c.vertices {
+				c.vertices[k] = cdtVertex{coord(), coord()}
+			}
+			if i%2 == 0 { // d near the circle: a point of the triangle moved by a little
+				k := rng.IntN(3)
+				c.vertices[3] = cdtVertex{c.vertices[k].x + rng.Int64N(5) - 2, c.vertices[k].y + rng.Int64N(5) - 2}
+			}
+			a, b, cc, d := c.vertices[0], c.vertices[1], c.vertices[2], c.vertices[3]
+			if got, want := c.inCircle(0, 1, 2, 3), inCircleCxx(a, b, cc, d); got != want {
+				t.Fatalf("span %d: inCircle(%v, %v, %v, %v) = %v, want %v", span, a, b, cc, d, got, want)
+			}
+		}
+	}
+}
+
+func TestRadixSort(t *testing.T) {
+	rng := rand.New(rand.NewPCG(15, 16))
+	for _, n := range []int{0, 1, 2, 255, 256, 1000, 20000} {
+		for _, keyBits := range []uint{0, 3, 8, 13, 32, 47, 64} {
+			a := make([]radixPair, n)
+			for i := range a {
+				k := rng.Uint64()
+				if keyBits < 64 {
+					k &= 1<<keyBits - 1
+				}
+				if rng.IntN(3) == 0 { // a key with its high byte set
+					k |= 0xFF << 56
+				}
+				a[i] = radixPair{k, uint64(i)}
+			}
+			want := slices.Clone(a)
+			slices.SortStableFunc(want, func(p, q radixPair) int { return cmp.Compare(p.key, q.key) })
+			got := radixSort(a, make([]radixPair, n))
+			if !slices.Equal(got, want) {
+				t.Fatalf("n %d, %d key bits: not sorted stably", n, keyBits)
+			}
+		}
+	}
+}
+
+func TestSortVerticesRadix(t *testing.T) {
+	rng := rand.New(rand.NewPCG(17, 18))
+	spans := [][2]int64{{0, 0}, {0, 7}, {0, gridSize}, {math.MinInt32, math.MaxInt32}, {-1000, 1000}}
+	for _, xs := range spans {
+		for _, ys := range spans {
+			for _, n := range []int{radixMin, 5000} {
+				var c constrained[uint32]
+				c.pointCount = uint32(n)
+				c.sorted = make([]sortItem, n)
+				coord := func(s [2]int64) int64 { return s[0] + rng.Int64N(s[1]-s[0]+1) }
+				for i := range c.sorted {
+					c.sorted[i] = sortItem{coord(xs), coord(ys), uint32(i)}
+					if i > 0 && rng.IntN(4) == 0 { // a duplicate point
+						p := c.sorted[rng.IntN(i)]
+						c.sorted[i] = sortItem{p.x, p.y, uint32(i)}
+					}
+				}
+				want := slices.Clone(c.sorted)
+				slices.SortFunc(want, sortItemCompare)
+				c.sortVertices()
+				if !slices.Equal(c.sorted, want) {
+					t.Fatalf("x in %v, y in %v, %d points: radix sort differs", xs, ys, n)
+				}
+			}
+		}
 	}
 }
