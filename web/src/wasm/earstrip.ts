@@ -36,9 +36,19 @@ export interface Result {
   stripClockwise: Uint8Array;
   /** Three indices per counter-clockwise triangle, in strip order. */
   triangles: Uint32Array;
+  /**
+   * All strips as one index buffer for a TRIANGLE_STRIP draw call, with
+   * RESTART_INDEX between strips (Triangulator.Restart). Every triangle is
+   * counter-clockwise: a strip that starts clockwise has its first index twice.
+   * Empty in triangle list mode.
+   */
+  restart: Uint32Array;
   /** Points the constrained triangulation added, x, y each: index n + k. */
   extra: Float64Array;
 }
+
+/** The primitive restart index of Result.restart, WebGL 2's for 32-bit indices. */
+export const RESTART_INDEX = 0xffffffff;
 
 export interface Timing {
   runs: number;

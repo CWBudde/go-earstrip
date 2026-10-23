@@ -81,6 +81,47 @@ func TestRunMatchesTriangulator(t *testing.T) {
 	}
 }
 
+// TestRestart decodes Result.Restart as WebGL 2 draws a TRIANGLE_STRIP with primitive restart and checks that it
+// gives the triangles of Result.Triangles, in the same order and orientation.
+func TestRestart(t *testing.T) {
+	var r Runner
+	for _, p := range Presets() {
+		res, err := r.Run(FlatInts(p.Rings), defaults)
+		if err != nil {
+			t.Fatalf("%s / %s: %v", p.Group, p.Name, err)
+		}
+		var got []uint32
+		strip := 0
+		for i := range res.Restart {
+			if res.Restart[i] == RestartIndex {
+				strip = 0
+				continue
+			}
+			strip++
+			if strip < 3 {
+				continue
+			}
+			a, b, c := res.Restart[i-2], res.Restart[i-1], res.Restart[i]
+			if strip%2 == 0 {
+				a, b = b, a
+			}
+			if a != b && b != c && a != c {
+				got = append(got, a, b, c)
+			}
+		}
+		if !slices.Equal(got, res.Triangles) {
+			t.Errorf("%s / %s: restart buffer %v gives %v, want %v", p.Group, p.Name, res.Restart, got, res.Triangles)
+		}
+	}
+	list, err := r.Run(FlatInts(Presets()[0].Rings), Options{TriangleList: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Restart) != 0 {
+		t.Errorf("triangle list mode: restart buffer %v, want none", list.Restart)
+	}
+}
+
 func TestExtraPoints(t *testing.T) {
 	var r Runner
 	bowTie := Flat{Coords: []float64{0, 0, 10, 10, 10, 0, 0, 10}}

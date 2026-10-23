@@ -12,21 +12,16 @@ import {
   Pause,
   PenLine,
   Play,
+  Sparkles,
   Trash2,
   Undo2,
 } from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Benchmark } from "@/components/Benchmark";
 import { Toggle } from "@/components/Toggle";
 import { Viewport, type Display, type Mode } from "@/components/Viewport";
+import { Showcase } from "@/showcase/Showcase";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,14 +61,15 @@ import {
   type Rings,
 } from "@/lib/polygon";
 import { formatTime } from "@/lib/format";
+import { STATUS } from "@/lib/status";
 import { restartLength, triangleStrips } from "@/lib/strips";
+import { useDark } from "@/lib/theme";
 import {
   loadEarstrip,
   type Earstrip,
   type Flat,
   type Options,
   type Result,
-  type Status,
   type Timing,
 } from "@/wasm/earstrip";
 
@@ -100,44 +96,10 @@ const TIME_BUDGET = 40;
 
 const UNDO_DEPTH = 100;
 
-/** The status table of the README. */
-const STATUS: Record<Status, { text: string; good: boolean }> = {
-  Exact: { text: "The triangles cover the polygon exactly.", good: true },
-  HolesLeftOut: {
-    text: "A hole could not be joined to the boundary (it lies outside or crosses it) and is left out.",
-    good: false,
-  },
-  Constrained: {
-    text: "Covered by the constrained triangulation: the rings cross, a hole could not be joined, or there are more than 128 rings. It fills what lies inside the outer ring by the non-zero winding rule and outside every hole.",
-    good: true,
-  },
-  Approximate: {
-    text: "The ears ran out (the polygon is not simple) and the rest was cut by forced cuts.",
-    good: false,
-  },
-  Refused: {
-    text: "The ears ran out and forced cuts are off: the strips cover only what the ears did.",
-    good: false,
-  },
-};
-
 type LoadState =
   | { status: "loading" }
   | { status: "ready"; api: Earstrip }
   | { status: "error"; message: string };
-
-const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
-
-/** Whether the page is dark; main.tsx follows the system the same way. */
-function useDark(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      darkQuery.addEventListener("change", onChange);
-      return () => darkQuery.removeEventListener("change", onChange);
-    },
-    () => darkQuery.matches,
-  );
-}
 
 function Header({ goVersion }: { goVersion?: string }) {
   return (
@@ -870,11 +832,14 @@ function Playground({
   );
 }
 
-type Tab = "playground" | "performance";
+type Tab = "playground" | "performance" | "showcase";
 
-/** The tab the address names: #performance, else the Playground. */
+/** The tab the address names: #performance, #showcase(/demo), else the Playground. */
 function tabFromHash(): Tab {
-  return window.location.hash === "#performance" ? "performance" : "playground";
+  const hash = window.location.hash;
+  if (hash === "#performance") return "performance";
+  if (hash === "#showcase" || hash.startsWith("#showcase/")) return "showcase";
+  return "playground";
 }
 
 export default function App() {
@@ -890,10 +855,11 @@ export default function App() {
   }, []);
 
   function changeTab(next: string) {
-    const t = next === "performance" ? "performance" : "playground";
+    const t =
+      next === "performance" || next === "showcase" ? next : "playground";
     setTab(t);
     const url = new URL(window.location.href);
-    url.hash = t === "performance" ? "performance" : "";
+    url.hash = t === "playground" ? "" : t;
     window.history.replaceState(null, "", url);
   }
 
@@ -949,15 +915,18 @@ export default function App() {
         {state.status === "ready" && (
           <Tabs value={tab} onValueChange={changeTab} className="gap-6">
             <TabsList>
-              <TabsTrigger value="playground" className="px-3">
+              <TabsTrigger value="playground" className="px-2 sm:px-3">
                 <PenLine /> Playground
               </TabsTrigger>
-              <TabsTrigger value="performance" className="px-3">
+              <TabsTrigger value="performance" className="px-2 sm:px-3">
                 <Gauge /> Performance
               </TabsTrigger>
+              <TabsTrigger value="showcase" className="px-2 sm:px-3">
+                <Sparkles /> Showcase
+              </TabsTrigger>
             </TabsList>
-            {/* Both stay mounted, so that each keeps its state and a benchmark
-                runs on while the other tab shows. */}
+            {/* All stay mounted, so that each keeps its state and a benchmark
+                runs on while another tab shows; the showcase pauses. */}
             <TabsContent
               value="playground"
               forceMount
@@ -971,6 +940,13 @@ export default function App() {
               className="data-[state=inactive]:hidden"
             >
               <Benchmark api={state.api} own={polygon} />
+            </TabsContent>
+            <TabsContent
+              value="showcase"
+              forceMount
+              className="data-[state=inactive]:hidden"
+            >
+              <Showcase api={state.api} active={tab === "showcase"} />
             </TabsContent>
           </Tabs>
         )}

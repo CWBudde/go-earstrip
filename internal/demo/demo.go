@@ -126,14 +126,21 @@ type Result struct {
 	// Triangles are three indices per counter-clockwise triangle: from the strips, strip by strip, or the triangle
 	// list in triangle list mode.
 	Triangles []uint32
+	// Restart is the index buffer of Triangulator.Restart: all strips with RestartIndex between them, for one
+	// TRIANGLE_STRIP draw call in WebGL 2. Empty in triangle list mode.
+	Restart []uint32
 	// Extra are the points the constrained triangulation added, x, y each.
 	Extra []float64
 }
+
+// RestartIndex is the primitive restart index of Result.Restart, the one WebGL 2 uses for 32-bit indices.
+const RestartIndex = 0xFFFFFFFF
 
 // Runner runs one reused Triangulator, as an application would.
 type Runner struct {
 	t         earstrip.Triangulator[uint32]
 	triangles []uint32
+	restart   []uint32
 }
 
 // check returns an error for input RunFlat would panic on, or that the triangulator does not take.
@@ -183,6 +190,8 @@ func (r *Runner) Run(f Flat, o Options) (Result, error) {
 	} else {
 		r.triangles = r.t.Triangles(r.triangles[:0])
 		res.Triangles = r.triangles
+		r.restart = r.t.Restart(r.restart[:0], RestartIndex)
+		res.Restart = r.restart
 	}
 	return res, nil
 }

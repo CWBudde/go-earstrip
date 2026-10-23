@@ -111,7 +111,7 @@ func workload(args []js.Value) (any, error) {
 }
 
 // triangulate(coords, holeStarts, options) runs the triangulator and returns {status, holesLeftOut, strips,
-// stripEnds, stripClockwise, triangles, extra} as typed arrays.
+// stripEnds, stripClockwise, triangles, restart, extra} as typed arrays.
 func triangulate(args []js.Value) (any, error) {
 	f, o, err := argPolygon(args)
 	if err != nil {
@@ -128,6 +128,7 @@ func triangulate(args []js.Value) (any, error) {
 		"stripEnds":      uint32sToJS(res.StripEnds),
 		"stripClockwise": bytesToJS(res.StripClockwise),
 		"triangles":      uint32sToJS(res.Triangles),
+		"restart":        uint32sToJS(res.Restart),
 		"extra":          float64sToJS(res.Extra),
 	}, nil
 }
