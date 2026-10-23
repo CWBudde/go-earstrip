@@ -56,6 +56,7 @@ func (t *Triangulator[I]) classifyRing(count uint32, reversed bool) bool {
 		turns++
 	}
 	t.blockerCount = found
+	t.ears.reset() // the kd tree holds the old blockers
 	return found == 0 && turns == 2
 }
 
@@ -81,6 +82,7 @@ func (t *Triangulator[I]) classifyCycle(start uint32) uint32 {
 		}
 	}
 	t.blockerCount = found
+	t.ears.reset() // the kd tree holds the old blockers
 	return count
 }
 
@@ -132,6 +134,7 @@ func (t *Triangulator[I]) buildIndex() {
 	t.buckets = 1
 	// a short list stays as the classification wrote it
 	if count <= smallBlockers {
+		t.ears.reset()
 		return
 	}
 	minX, minY := n[blockers[0]].x, n[blockers[0]].y
@@ -289,7 +292,12 @@ func (t *Triangulator[I]) emptyEar(b *node[I]) bool {
 		lo, hi = min3(a.x, b.x, c.x), max3(a.x, b.x, c.x)
 	}
 	start := t.bucketStart
-	return emptyTriangleBox(t.items, start[t.bucket(lo)], start[t.bucket(hi)+1], a, b, c, ia, ic)
+	begin, end := start[t.bucket(lo)], start[t.bucket(hi)+1]
+	// a large slab may go to the kd tree, which gives the same answer (earindex.go)
+	if end-begin > earIndexSlab || checkEarIndex {
+		return t.emptyEarIndexed(a, b, c, ia, ic, lo, hi, begin, end)
+	}
+	return emptyTriangleBox(t.items, begin, end, a, b, c, ia, ic)
 }
 
 // Removes node id from the blocker index: swapped out of a single bucket, marked gone in several.
@@ -303,6 +311,10 @@ func (t *Triangulator[I]) dropBlocker(v *node[I], id uint32) {
 		t.slot[items[i].node] = i
 	} else {
 		items[i].x = math.Inf(1)
+		// the kd tree outlives rebuildIndex, which keeps the live items
+		if t.ears.ready {
+			t.ears.drop(id)
+		}
 		if t.live*2 < t.built {
 			t.rebuildIndex()
 		}
