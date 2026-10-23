@@ -1,22 +1,29 @@
 package earstrip
 
+import "math/bits"
+
 // The mesh of detail::Constrained<Index>: the Delaunay triangulation of the vertices, the inserted ring segments,
 // the added points, the fill and the strips.
 
 // ---------- mesh ----------
 
+// multipleOf3 is 1 when x % 3 == 0, else 0, without a branch: the branch of a test of e % 3 goes either way at random
+// and is often mispredicted. x * 0xAAAAAAAAAAAAAAAB (the inverse of 3 modulo 2^64) is at most 0x5555555555555555
+// exactly for the multiples of 3, which the borrow of subtracting 0x5555555555555556 tells.
+func multipleOf3(x uint64) uint64 {
+	_, borrow := bits.Sub64(x*0xAAAAAAAAAAAAAAAB, 0x5555555555555556, 0)
+	return borrow
+}
+
+// nextEdge and prevEdge as e % 3 == 2 ? e - 2 : e + 1 and e % 3 == 0 ? e + 2 : e - 1, for every e: e % 3 == 2 is
+// (e + 1) % 3 == 0, taken in 64 bits so that e + 1 does not wrap.
 func nextEdge(e uint32) uint32 {
-	if e%3 == 2 {
-		return e - 2
-	}
-	return e + 1
+	n := uint64(e) + 1
+	return uint32(n - 3*multipleOf3(n))
 }
 
 func prevEdge(e uint32) uint32 {
-	if e%3 == 0 {
-		return e + 2
-	}
-	return e - 1
+	return e - 1 + 3*uint32(multipleOf3(uint64(e)))
 }
 
 func (c *constrained[I]) newTriangle(a, b, cc uint32) uint32 {
@@ -129,47 +136,64 @@ func (c *constrained[I]) prevBoundary(e uint32) uint32 {
 // flip replaces the diagonal e of a convex quad by the other one. With e = a -> b, c its apex and d the apex of its
 // twin, e's triangle becomes a, d, c and the twin's becomes b, c, d; the edges c -> a and d -> b stay in place.
 func (c *constrained[I]) flip(e uint32) {
-	f := c.twin[e]
+	// Local copies of the slices: Go would load them from c again after every store. link is written out for the
+	// same reason.
+	org, twin, wnd := c.org, c.twin, c.wind
+	f := twin[e]
 	e1, e2, f1, f2 := nextEdge(e), prevEdge(e), nextEdge(f), prevEdge(f)
-	a, b, cc, d := c.org[e], c.org[f], c.org[e2], c.org[f2]
-	te, tf := c.twin[e1], c.twin[f1]
-	we, wf := c.wind[e1], c.wind[f1]
-	c.org[e1] = d
-	c.org[f1] = cc
-	c.link(e, tf)
-	c.wind[e] = wf
-	c.link(f, te)
-	c.wind[f] = we
-	c.link(e1, f1)
-	c.wind[e1], c.wind[f1] = wind{}, wind{}
+	a, b, cc, d := org[e], org[f], org[e2], org[f2]
+	te, tf := twin[e1], twin[f1]
+	we, wf := wnd[e1], wnd[f1]
+	org[e1] = d
+	org[f1] = cc
+	// link(e, tf)
+	twin[e] = tf
+	if tf != none {
+		twin[tf] = e
+	}
+	wnd[e] = wf
+	// link(f, te)
+	twin[f] = te
+	if te != none {
+		twin[te] = f
+	}
+	wnd[f] = we
+	// link(e1, f1)
+	twin[e1] = f1
+	twin[f1] = e1
+	wnd[e1], wnd[f1] = wind{}, wind{}
 	if tf == none {
 		c.hullEdge[a] = e
 	}
 	if te == none {
 		c.hullEdge[b] = f
 	}
-	c.vertexEdge[a] = e
-	c.vertexEdge[b] = f
-	c.vertexEdge[cc] = e2
-	c.vertexEdge[d] = f2
+	vertexEdge := c.vertexEdge
+	vertexEdge[a] = e
+	vertexEdge[b] = f
+	vertexEdge[cc] = e2
+	vertexEdge[d] = f2
 }
 
 // legalize flips the edges on the stack until the triangles beside them are locally Delaunay; each edge on the stack
 // has the new point as the apex of its triangle. Edges the fill rule sees stay.
 func (c *constrained[I]) legalize() {
+	// Local copies of the slices, as in flip; flip does not change them, nor the triangle count.
+	org, twin, wnd, stack := c.org, c.twin, c.wind, c.stack
+	limit := 64*c.triangleCount + 1024
 	// flips only improve, so this ends; the guard keeps a bad float predicate from looping
-	for flips := uint32(0); len(c.stack) > 0 && flips <= 64*c.triangleCount+1024; {
-		e := c.stack[len(c.stack)-1]
-		c.stack = c.stack[:len(c.stack)-1]
-		f := c.twin[e]
-		if f == none || significant(c.wind[e]) || !c.inCircle(c.org[e], c.org[nextEdge(e)], c.org[prevEdge(e)], c.org[prevEdge(f)]) {
+	for flips := uint32(0); len(stack) > 0 && flips <= limit; {
+		e := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		f := twin[e]
+		if f == none || significant(wnd[e]) || !c.inCircle(org[e], org[nextEdge(e)], org[prevEdge(e)], org[prevEdge(f)]) {
 			continue
 		}
 		c.flip(e)
 		flips++
-		c.stack = append(c.stack, e, prevEdge(f))
+		stack = append(stack, e, prevEdge(f))
 	}
-	c.stack = c.stack[:0]
+	c.stack = stack[:0]
 }
 
 // ---------- Delaunay triangulation of the vertices ----------
