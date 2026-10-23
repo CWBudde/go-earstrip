@@ -115,7 +115,10 @@ function tunnel(
   const angle = (i: number) => {
     const a = Math.max(0, i - 1);
     const b = Math.min(n - 1, i + 1);
-    return Math.atan2(path[2 * b + 1] - path[2 * a + 1], path[2 * b] - path[2 * a]);
+    return Math.atan2(
+      path[2 * b + 1] - path[2 * a + 1],
+      path[2 * b] - path[2 * a],
+    );
   };
   for (let i = 0; i < n; i++) {
     const a = angle(i);
@@ -131,7 +134,10 @@ function tunnel(
   for (let k = 1; k < 6; k++) {
     const a = end + Math.PI / 2 - (k * Math.PI) / 6;
     const w = half(n - 1);
-    out.push(path[2 * n - 2] + Math.cos(a) * w, path[2 * n - 1] + Math.sin(a) * w);
+    out.push(
+      path[2 * n - 2] + Math.cos(a) * w,
+      path[2 * n - 1] + Math.sin(a) * w,
+    );
   }
   for (let i = n - 1; i >= 0; i--) out.push(right[2 * i], right[2 * i + 1]);
   // The cap at the start, from the right side round the back to the left.
@@ -151,7 +157,8 @@ function room(rand: () => number, cx: number, cy: number, r: number): Ring {
   const out: number[] = [];
   for (let k = 0; k < 36; k++) {
     const t = (k / 36) * 2 * Math.PI;
-    const rr = r * (1 + 0.16 * Math.sin(3 * t + a) + 0.08 * Math.sin(5 * t + b));
+    const rr =
+      r * (1 + 0.16 * Math.sin(3 * t + a) + 0.08 * Math.sin(5 * t + b));
     out.push(cx + Math.cos(t) * rr, cy + Math.sin(t) * rr * 0.72);
   }
   return ring(out);
@@ -173,7 +180,8 @@ export function makeTerrain(seed: number): Terrain {
     const x = i * HEIGHT_STEP;
     const u = x / WORLD_W;
     let y = 440;
-    for (const w of waves) y += w.amp * Math.sin(2 * Math.PI * w.f * u + w.phase);
+    for (const w of waves)
+      y += w.amp * Math.sin(2 * Math.PI * w.f * u + w.phase);
     y -= hillH * Math.exp(-(((x - hillX) / hillW) ** 2));
     // Raised edges, so that balls roll towards the middle.
     const edge = Math.min(u, 1 - u);
@@ -202,7 +210,12 @@ export function makeTerrain(seed: number): Terrain {
   caves.push(tunnel(rand, ox, oy, hillX - side * hillW * 0.45, oy + 6, 15));
   // A cave room deep under the mountain.
   caves.push(
-    room(rand, hillX + side * 30, Math.min(surfaceY(heights, hillX) + 220, WORLD_H - 90), 52),
+    room(
+      rand,
+      hillX + side * 30,
+      Math.min(surfaceY(heights, hillX) + 220, WORLD_H - 90),
+      52,
+    ),
   );
   return { seed, heights, caves };
 }

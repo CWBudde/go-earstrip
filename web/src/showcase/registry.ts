@@ -1,6 +1,7 @@
 // The demos of the Showcase tab. Each lives in its own directory as
 // showcase/<id>/index.ts and exports `demo`; this file finds them, so that a
-// new demo needs no line here.
+// new demo needs no line here. A demo's Component is React.lazy, so that its
+// code loads only when it is picked.
 
 import type { ComponentType } from "react";
 

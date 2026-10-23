@@ -146,7 +146,8 @@ export class Sim {
     add(0.35, 0.6, 8, 40);
     add(0.6, 0.645, 14, 36);
     add(0.85, 0.69, 6, 42);
-    for (let i = 0; i < 9; i++) add(1.15 + i * 0.06, 0.3 + i * 0.006, 4 + i * 22, 30);
+    for (let i = 0; i < 9; i++)
+      add(1.15 + i * 0.06, 0.3 + i * 0.006, 4 + i * 22, 30);
     add(1.9, 0.47, 30, 58);
     add(2.25, 0.84, 10, 38);
     add(2.45, 0.865, 30, 34);
@@ -178,7 +179,9 @@ export class Sim {
     const j1 = Math.min(SCORCH_H - 1, Math.ceil((y + reach) / SCORCH_CELL));
     for (let j = j0; j <= j1; j++) {
       for (let i = i0; i <= i1; i++) {
-        const d = Math.hypot((i + 0.5) * SCORCH_CELL - x, (j + 0.5) * SCORCH_CELL - y) / r;
+        const d =
+          Math.hypot((i + 0.5) * SCORCH_CELL - x, (j + 0.5) * SCORCH_CELL - y) /
+          r;
         if (d >= 1.7) continue;
         const v = d < 1 ? 1 : 1 - (d - 1) / 0.7;
         const n = 0.7 + 0.3 * this.#rand();
@@ -283,7 +286,15 @@ export class Sim {
       let i = this.balls;
       if (i >= MAX_BALLS) {
         // Past the cap the oldest ball makes room: shift the rest down.
-        for (const a of [this.bx, this.by, this.bvx, this.bvy, this.spin, this.angle, this.hue])
+        for (const a of [
+          this.bx,
+          this.by,
+          this.bvx,
+          this.bvy,
+          this.spin,
+          this.angle,
+          this.hue,
+        ])
           a.copyWithin(0, 1, MAX_BALLS);
         i = MAX_BALLS - 1;
       } else {
@@ -488,7 +499,11 @@ export class Sim {
       data[o + 5] = this.#color[3 * n + 1];
       data[o + 6] = this.#color[3 * n + 2];
       data[o + 7] =
-        kind === SMOKE ? 0.45 * f * Math.min(1, (1 - f) * 6) : kind === DEBRIS ? Math.min(1, f * 3) : f;
+        kind === SMOKE
+          ? 0.45 * f * Math.min(1, (1 - f) * 6)
+          : kind === DEBRIS
+            ? Math.min(1, f * 3)
+            : f;
       n++;
     }
     this.particles = n;

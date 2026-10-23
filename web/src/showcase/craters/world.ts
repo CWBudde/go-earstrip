@@ -170,7 +170,9 @@ export class World {
     this.#mark(crater);
     const reach = crater.r * OUTER;
     const near = this.craters.filter(
-      (c) => c !== crater && Math.hypot(c.x - crater.x, c.y - crater.y) < c.r * OUTER + reach,
+      (c) =>
+        c !== crater &&
+        Math.hypot(c.x - crater.x, c.y - crater.y) < c.r * OUTER + reach,
     );
     for (const c of near) {
       if (this.#covered(c, this.craters)) {

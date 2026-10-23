@@ -10,8 +10,24 @@ import { RESTART_INDEX } from "@/wasm/earstrip";
 import {
   BALL_R,
   LIGHT_SECONDS,
-  MAX_BALLS, MAX_LIGHTS, MAX_PARTICLES, PARTICLE_FLOATS, SCORCH_H, SCORCH_W, type Sim } from "./sim";
-import { COLS, HEIGHT_SAMPLES, HEIGHT_STEP, ROWS, TILE_H, TILE_W, WORLD_H, WORLD_W } from "./terrain";
+  MAX_BALLS,
+  MAX_LIGHTS,
+  MAX_PARTICLES,
+  PARTICLE_FLOATS,
+  SCORCH_H,
+  SCORCH_W,
+  type Sim,
+} from "./sim";
+import {
+  COLS,
+  HEIGHT_SAMPLES,
+  HEIGHT_STEP,
+  ROWS,
+  TILE_H,
+  TILE_W,
+  WORLD_H,
+  WORLD_W,
+} from "./terrain";
 
 const f = (x: number) => x.toFixed(1);
 
@@ -356,7 +372,14 @@ class Points {
     gl.bufferData(gl.ARRAY_BUFFER, floats * 4, gl.DYNAMIC_DRAW);
     for (const [loc, size, offset] of layout) {
       gl.enableVertexAttribArray(loc);
-      gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride * 4, offset * 4);
+      gl.vertexAttribPointer(
+        loc,
+        size,
+        gl.FLOAT,
+        false,
+        stride * 4,
+        offset * 4,
+      );
     }
     gl.bindVertexArray(null);
   }
@@ -451,7 +474,17 @@ export class Renderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, SCORCH_W, SCORCH_H, 0, gl.RED, gl.UNSIGNED_BYTE, null);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.R8,
+      SCORCH_W,
+      SCORCH_H,
+      0,
+      gl.RED,
+      gl.UNSIGNED_BYTE,
+      null,
+    );
 
     this.#empty = gl.createVertexArray();
     this.#mesh = new Mesh(gl);
@@ -474,12 +507,32 @@ export class Renderer {
     if (this.#terrain !== sim.terrain) {
       this.#terrain = sim.terrain;
       gl.bindTexture(gl.TEXTURE_2D, this.#heights);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, HEIGHT_SAMPLES, 1, 0, gl.RED, gl.FLOAT, sim.terrain.heights);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.R32F,
+        HEIGHT_SAMPLES,
+        1,
+        0,
+        gl.RED,
+        gl.FLOAT,
+        sim.terrain.heights,
+      );
     }
     if (sim.scorchDirty) {
       sim.scorchDirty = false;
       gl.bindTexture(gl.TEXTURE_2D, this.#scorch);
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, SCORCH_W, SCORCH_H, gl.RED, gl.UNSIGNED_BYTE, sim.scorch);
+      gl.texSubImage2D(
+        gl.TEXTURE_2D,
+        0,
+        0,
+        0,
+        SCORCH_W,
+        SCORCH_H,
+        gl.RED,
+        gl.UNSIGNED_BYTE,
+        sim.scorch,
+      );
     }
     const b = this.#builder;
     if (this.#version !== sim.world.version) {
@@ -507,7 +560,8 @@ export class Renderer {
    */
   #buildLines(indices: Uint32Array): void {
     const need = 4 * indices.length;
-    if (this.#lineIndices.length < need) this.#lineIndices = new Uint32Array(Math.ceil(need * 1.5));
+    if (this.#lineIndices.length < need)
+      this.#lineIndices = new Uint32Array(Math.ceil(need * 1.5));
     const out = this.#lineIndices;
     let n = 0;
     for (let i = 0; i < indices.length; i++) {
@@ -620,7 +674,8 @@ export class Renderer {
     }
 
     let lit = false;
-    for (let i = 0; i < MAX_LIGHTS; i++) if (sim.lights[4 * i + 3] >= 0) lit = true;
+    for (let i = 0; i < MAX_LIGHTS; i++)
+      if (sim.lights[4 * i + 3] >= 0) lit = true;
     if (lit) {
       common(this.#fx);
       gl.uniform4fv(this.#fx.u.lights, sim.lights);
@@ -632,7 +687,15 @@ export class Renderer {
 
   dispose(): void {
     const gl = this.#gl;
-    for (const p of [this.#sky, this.#ground, this.#shadow, this.#line, this.#ball, this.#particle, this.#fx])
+    for (const p of [
+      this.#sky,
+      this.#ground,
+      this.#shadow,
+      this.#line,
+      this.#ball,
+      this.#particle,
+      this.#fx,
+    ])
       gl.deleteProgram(p.program);
     gl.deleteTexture(this.#heights);
     gl.deleteTexture(this.#scorch);

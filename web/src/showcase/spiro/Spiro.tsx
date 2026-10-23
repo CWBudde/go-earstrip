@@ -166,11 +166,6 @@ export function Spiro({ api, active }: ShowcaseProps) {
   const [outline, setOutline] = useState(true);
   const [crossings, setCrossings] = useState(true);
   const [byStrip, setByStrip] = useState(false);
-  // On a phone the HUD would hide most of the stage, so it starts hidden
-  // there.
-  const [hud, setHud] = useState(
-    () => window.matchMedia("(min-width: 640px)").matches,
-  );
 
   const scene = useRef<SpiroScene>(undefined);
   const time = useRef(SWING * 0.4);
@@ -354,11 +349,9 @@ export function Spiro({ api, active }: ShowcaseProps) {
     <ShowcaseLayout
       stage={<GLCanvas setup={setup} />}
       hud={
-        hud ? (
-          <Hud stats={stats}>
-            <SpiroRows info={info} />
-          </Hud>
-        ) : undefined
+        <Hud stats={stats}>
+          <SpiroRows info={info} />
+        </Hud>
       }
       controls={
         <>
@@ -544,13 +537,6 @@ export function Spiro({ api, active }: ShowcaseProps) {
                 step={100}
                 format={(v) => v.toLocaleString()}
                 onChange={setVertices}
-              />
-              <Toggle
-                id="spiro-hud"
-                label="Statistics"
-                hint="The overlay with the status, counts and times."
-                checked={hud}
-                onChange={setHud}
               />
             </CardContent>
           </Card>

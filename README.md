@@ -64,9 +64,17 @@ watch the strips, the status and the extra points change; the triangles can be s
 The **Performance** tab times go-earstrip, in several settings, against [earcut](https://github.com/mapbox/earcut)
 and [libtess.js](https://github.com/brendankenny/libtess.js) (the GLU tessellator) on generated polygons from 100 to
 100,000 vertices or on your own, and compares what they write: triangles, indices, area and extra points.
-The **Showcase** tab's world map triangulates every country of [Natural Earth](https://www.naturalearthdata.com)
-(public domain; `just naturalearth` converts it into `web/public/world-*.bin`) in one call and draws the world from
-one restart index buffer.
+The **Showcase** tab triangulates live and draws the strips with WebGL 2, straight from the restart index buffer
+(`Triangulator.Restart`):
+
+- **World map**: every country of [Natural Earth](https://www.naturalearthdata.com) (public domain;
+  `just naturalearth` converts it into `web/public/world-*.bin`) in one batch call, drawn in one draw call, strip
+  by strip on load.
+- **Crater sandbox**: blast craters into a tiled terrain. A tile is a square minus every crater that touches it,
+  and the constrained triangulation takes the overlapping holes apart; only changed tiles run again.
+- **Spirograph**: curves that cross themselves hundreds of times, filled by the non-zero winding rule every frame,
+  with the extra points at the crossings, as a kaleidoscope.
+- **Lava lamp**: metaballs whose iso-bands become polygons with holes, about 20 calls per frame.
 
 ```sh
 just dev-demo     # cmd/demo as js/wasm, then Vite's dev server at http://localhost:5173/go-earstrip/

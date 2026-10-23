@@ -168,7 +168,10 @@ func (r *Runner) RunMany(b Batch, o Options) (BatchResult, error) {
 		begin := uint32(0)
 		listEnd := uint32(len(res.List) - len(m.triangles))
 		for _, e := range r.t.StripEnds() {
-			listEnd += 3 * (e - begin - 2)
+			// A strip of k indices has k - 2 triangles; Triangles skips one shorter than 3.
+			if e-begin > 2 {
+				listEnd += 3 * (e - begin - 2)
+			}
 			res.StripListEnds = append(res.StripListEnds, listEnd)
 			begin = e
 		}

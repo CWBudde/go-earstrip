@@ -78,7 +78,11 @@ Internal packages (test support only):
   (`_js.go` files, js/wasm only) publishes it as `globalThis.earstrip`. `web/` is the Vite/React/shadcn front end
   (its own `go.mod` keeps `./...` out of `node_modules`), deployed to GitHub Pages by `.github/workflows/pages.yml`.
   Its Performance tab (`web/src/lib/bench.ts`, `components/Benchmark.tsx`) times go-earstrip against earcut and
-  libtess.js in the browser.
+  libtess.js in the browser. Its Showcase tab (`web/src/showcase/`) holds WebGL 2 demos, one per
+  `showcase/<id>/index.ts` (found by `registry.ts`, loaded lazily), sharing `lib/gl.ts` (`StripBuilder`, `Mesh`),
+  `Hud`, `FrameStats` and `Layout`; a demo stops its animation loop while its `active` prop is false. The world map
+  uses the batch call `triangulateMany` (`internal/demo/batch.go`) and `web/public/world-*.bin`, written by
+  `cmd/naturalearth` (`just naturalearth`).
 
 ## Rules for keeping it bit-exact
 

@@ -1,7 +1,8 @@
 // The Showcase tab: a picker over the demos of registry.ts and the one picked,
 // named in the address as #showcase/<id>. Only the picked demo is mounted.
 
-import { useEffect, useState } from "react";
+import { LoaderCircle } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useVisible } from "@/lib/theme";
@@ -53,7 +54,23 @@ export function Showcase({ api, active }: { api: Earstrip; active: boolean }) {
       {demo !== undefined && (
         <>
           <p className="text-sm text-muted-foreground">{demo.blurb}</p>
-          <demo.Component key={demo.id} api={api} active={active && visible} />
+          <Suspense
+            fallback={
+              <p
+                className="flex items-center gap-2 text-sm text-muted-foreground"
+                role="status"
+              >
+                <LoaderCircle className="size-4 animate-spin" /> Loading the
+                demo…
+              </p>
+            }
+          >
+            <demo.Component
+              key={demo.id}
+              api={api}
+              active={active && visible}
+            />
+          </Suspense>
         </>
       )}
     </div>

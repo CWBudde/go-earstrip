@@ -60,17 +60,14 @@ function CraterRows({ sim }: { sim: Sim }) {
         <span className="text-muted-foreground">({info.dirty} redone)</span>
       </HudRow>
       <HudRow label="Craters">{info.craters}</HudRow>
-      {/* The stage is short on a phone; the rest would run off it. */}
-      <div className="hidden sm:contents">
-        <HudRow label="Tile runs">{statuses || "–"}</HudRow>
-        <HudRow label="Holes/tile">
-          {info.maxHoles}{" "}
-          <span className="text-muted-foreground">max of {HOLE_CAP}</span>
-        </HudRow>
-        <HudRow label="Balls">
-          {info.balls}/{MAX_BALLS}
-        </HudRow>
-      </div>
+      <HudRow label="Tile runs">{statuses || "–"}</HudRow>
+      <HudRow label="Holes/tile">
+        {info.maxHoles}{" "}
+        <span className="text-muted-foreground">max of {HOLE_CAP}</span>
+      </HudRow>
+      <HudRow label="Balls">
+        {info.balls}/{MAX_BALLS}
+      </HudRow>
     </>
   );
 }
@@ -92,7 +89,14 @@ export function Craters({ api, active }: ShowcaseProps) {
 
   const running = active && playing;
   // The latest settings for paint and the pointer, which run outside React.
-  const settings = useRef({ radius, strips, wireframe, dark, running, reduced });
+  const settings = useRef({
+    radius,
+    strips,
+    wireframe,
+    dark,
+    running,
+    reduced,
+  });
   useEffect(() => {
     settings.current = { radius, strips, wireframe, dark, running, reduced };
   });
@@ -238,11 +242,7 @@ export function Craters({ api, active }: ShowcaseProps) {
               >
                 <CircleDot /> Drop balls
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => restart(seed)}
-              >
+              <Button variant="outline" size="sm" onClick={() => restart(seed)}>
                 <RotateCcw /> Reset
               </Button>
               <Button
@@ -277,14 +277,14 @@ export function Craters({ api, active }: ShowcaseProps) {
               onChange={setWireframe}
             />
             <p className="text-xs text-muted-foreground">
-              Each of the {COLS} × {ROWS} tiles is one polygon: its square
-              minus the sky, the caves and every crater that touches it. Holes
-              that overlap or cross the square go to the constrained
-              triangulation, which subtracts them by the non-zero winding rule,
-              no clipping library involved. Only the tiles whose holes changed
-              are triangulated again; they flash. Past {HOLE_CAP} craters a
-              tile merges its oldest crater with the nearest one into a circle
-              around both, so ground never grows back. World {seed}.
+              Each of the {COLS} × {ROWS} tiles is one polygon: its square minus
+              the sky, the caves and every crater that touches it. Holes that
+              overlap or cross the square go to the constrained triangulation,
+              which subtracts them by the non-zero winding rule, no clipping
+              library involved. Only the tiles whose holes changed are
+              triangulated again; they flash. Past {HOLE_CAP} craters a tile
+              merges its oldest crater with the nearest one into a circle around
+              both, so ground never grows back. World {seed}.
             </p>
           </CardContent>
         </Card>

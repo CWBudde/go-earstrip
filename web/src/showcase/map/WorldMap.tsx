@@ -132,7 +132,6 @@ export function WorldMap({ api, active }: ShowcaseProps) {
   const [data, setData] = useState<Loaded>();
   const [error, setError] = useState<string>();
   const [drawCalls, setDrawCalls] = useState(1);
-  const [hudOpen, setHudOpen] = useState(false);
   const empty = useMemo(() => new FrameStats(), []);
   const stats = data?.stats ?? empty;
 
@@ -362,38 +361,20 @@ export function WorldMap({ api, active }: ShowcaseProps) {
         </div>
       }
       hud={
-        // On a phone the HUD would cover the map: it folds into a button.
-        <div className="flex flex-col items-start gap-1">
-          <button
-            type="button"
-            className="pointer-events-auto rounded-md border bg-background/80 px-2 py-1 text-xs tabular-nums shadow-sm backdrop-blur sm:hidden"
-            aria-expanded={hudOpen}
-            onClick={() => setHudOpen((o) => !o)}
-          >
-            {data === undefined
-              ? "Loading…"
-              : `${formatCount(data.result.list.length / 3)} triangles · ${data.result.ms.toFixed(0)} ms`}{" "}
-            <span className="text-muted-foreground">
-              {hudOpen ? "▴" : "▾"}
-            </span>
-          </button>
-          <div className={hudOpen ? "" : "max-sm:hidden"}>
-            <Hud stats={stats}>
-              {data !== undefined && (
-                <>
-                  <HudRow label="Polygons">
-                    {formatCount(data.world.polygonCountry.length)}
-                  </HudRow>
-                  <HudRow label="In Go">{data.result.ms.toFixed(1)} ms</HudRow>
-                  <HudRow label="Buffer">
-                    {bytes(list ? listBytes : stripBytes)}
-                  </HudRow>
-                  <HudRow label="Draws">{drawCalls}</HudRow>
-                </>
-              )}
-            </Hud>
-          </div>
-        </div>
+        <Hud stats={stats}>
+          {data !== undefined && (
+            <>
+              <HudRow label="Polygons">
+                {formatCount(data.world.polygonCountry.length)}
+              </HudRow>
+              <HudRow label="In Go">{data.result.ms.toFixed(1)} ms</HudRow>
+              <HudRow label="Buffer">
+                {bytes(list ? listBytes : stripBytes)}
+              </HudRow>
+              <HudRow label="Draws">{drawCalls}</HudRow>
+            </>
+          )}
+        </Hud>
       }
       controls={
         <Card>
