@@ -5,6 +5,7 @@ import {
   Copy,
   Dices,
   FileText,
+  Gauge,
   LoaderCircle,
   Maximize,
   MousePointer2,
@@ -23,6 +24,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { Benchmark } from "@/components/Benchmark";
+import { Toggle } from "@/components/Toggle";
 import { Viewport, type Display, type Mode } from "@/components/Viewport";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,7 +49,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -62,6 +65,7 @@ import {
   type Point,
   type Rings,
 } from "@/lib/polygon";
+import { formatTime } from "@/lib/format";
 import { restartLength, triangleStrips } from "@/lib/strips";
 import {
   loadEarstrip,
@@ -135,12 +139,6 @@ function useDark(): boolean {
   );
 }
 
-function formatTime(ns: number): string {
-  if (ns < 1e3) return `${ns.toFixed(0)} ns`;
-  if (ns < 1e6) return `${(ns / 1e3).toPrecision(3)} µs`;
-  return `${(ns / 1e6).toPrecision(3)} ms`;
-}
-
 function Header({ goVersion }: { goVersion?: string }) {
   return (
     <header className="flex flex-col gap-4">
@@ -204,32 +202,6 @@ function Header({ goVersion }: { goVersion?: string }) {
   );
 }
 
-function Toggle({
-  id,
-  label,
-  hint,
-  checked,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  hint?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex flex-col gap-0.5">
-        <Label htmlFor={id}>{label}</Label>
-        {hint !== undefined && (
-          <p className="text-xs text-muted-foreground">{hint}</p>
-        )}
-      </div>
-      <Switch id={id} checked={checked} onCheckedChange={onChange} />
-    </div>
-  );
-}
-
 function Stat({
   label,
   value,
@@ -270,7 +242,14 @@ function CopyButton({ text, label }: { text: () => string; label: string }) {
   );
 }
 
-function Playground({ api }: { api: Earstrip }) {
+function Playground({
+  api,
+  onPolygon,
+}: {
+  api: Earstrip;
+  /** Gets the polygon whenever it changes, for the Performance tab. */
+  onPolygon: (polygon: Flat) => void;
+}) {
   const presets = useMemo(() => api.presets(), [api]);
   const kinds = useMemo(() => api.kinds(), [api]);
   const groups = useMemo(() => {
@@ -307,6 +286,7 @@ function Playground({ api }: { api: Earstrip }) {
   const dark = useDark();
 
   const flat = useMemo(() => toFlat(rings), [rings]);
+  useEffect(() => onPolygon(flat), [flat, onPolygon]);
   const run = useMemo((): { result?: Result; error?: string } => {
     try {
       return { result: api.triangulate(flat, options) };
@@ -890,9 +870,32 @@ function Playground({ api }: { api: Earstrip }) {
   );
 }
 
+type Tab = "playground" | "performance";
+
+/** The tab the address names: #performance, else the Playground. */
+function tabFromHash(): Tab {
+  return window.location.hash === "#performance" ? "performance" : "playground";
+}
+
 export default function App() {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [tab, setTab] = useState<Tab>(tabFromHash);
+  const [polygon, setPolygon] = useState<Flat>();
+
+  useEffect(() => {
+    const onHash = () => setTab(tabFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  function changeTab(next: string) {
+    const t = next === "performance" ? "performance" : "playground";
+    setTab(t);
+    const url = new URL(window.location.href);
+    url.hash = t === "performance" ? "performance" : "";
+    window.history.replaceState(null, "", url);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -943,7 +946,34 @@ export default function App() {
             </CardContent>
           </Card>
         )}
-        {state.status === "ready" && <Playground api={state.api} />}
+        {state.status === "ready" && (
+          <Tabs value={tab} onValueChange={changeTab} className="gap-6">
+            <TabsList>
+              <TabsTrigger value="playground" className="px-3">
+                <PenLine /> Playground
+              </TabsTrigger>
+              <TabsTrigger value="performance" className="px-3">
+                <Gauge /> Performance
+              </TabsTrigger>
+            </TabsList>
+            {/* Both stay mounted, so that each keeps its state and a benchmark
+                runs on while the other tab shows. */}
+            <TabsContent
+              value="playground"
+              forceMount
+              className="data-[state=inactive]:hidden"
+            >
+              <Playground api={state.api} onPolygon={setPolygon} />
+            </TabsContent>
+            <TabsContent
+              value="performance"
+              forceMount
+              className="data-[state=inactive]:hidden"
+            >
+              <Benchmark api={state.api} own={polygon} />
+            </TabsContent>
+          </Tabs>
+        )}
         <footer className="mt-auto text-xs text-muted-foreground">
           go-earstrip © 2026 Christian Budde, a port of earstrip © 2026 Evgen
           Bodunov; ISC license.

@@ -61,6 +61,9 @@ t.Restart(nil, 0xFFFFFFFF) // one index buffer for TRIANGLE_STRIP with primitive
 [**Try it in the browser**](https://cwbudde.github.io/go-earstrip/): the library compiled to WebAssembly. Pick one of
 the cases of earstrip's `test.cpp` or a random polygon, drag, add and delete vertices or draw rings and holes, and
 watch the strips, the status and the extra points change; the triangles can be stepped through in output order.
+The **Performance** tab times go-earstrip, in several settings, against [earcut](https://github.com/mapbox/earcut)
+and [libtess.js](https://github.com/brendankenny/libtess.js) (the GLU tessellator) on generated polygons from 100 to
+100,000 vertices or on your own, and compares what they write: triangles, indices, area and extra points.
 
 ```sh
 just dev-demo     # cmd/demo as js/wasm, then Vite's dev server at http://localhost:5173/go-earstrip/

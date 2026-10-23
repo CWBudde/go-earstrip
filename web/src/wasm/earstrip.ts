@@ -45,6 +45,12 @@ export interface Timing {
   nsPerRun: number;
 }
 
+/** A polygon family of the benchmark; see internal/demo.Workloads. */
+export interface WorkloadInfo {
+  name: string;
+  about: string;
+}
+
 export interface PresetInfo {
   group: string;
   name: string;
@@ -67,6 +73,8 @@ interface EarstripGlobal {
   preset(index: number): WasmResult<Flat>;
   kinds(): WasmResult<string[]>;
   generate(kind: string, seed: number): WasmResult<Flat>;
+  workloads(): WasmResult<WorkloadInfo[]>;
+  workload(name: string, vertices: number): WasmResult<Flat>;
   triangulate(
     coords: Float64Array,
     holeStarts: number[],
@@ -121,6 +129,16 @@ export class Earstrip {
 
   generate(kind: string, seed: number): Flat {
     return unwrap(this.#api.generate(kind, seed));
+  }
+
+  /** The polygon families of the benchmark, which come in any size. */
+  workloads(): WorkloadInfo[] {
+    return unwrap(this.#api.workloads());
+  }
+
+  /** The polygon of the family with about this many vertices. */
+  workload(name: string, vertices: number): Flat {
+    return unwrap(this.#api.workload(name, vertices));
   }
 
   triangulate(polygon: Flat, options: Options): Result {

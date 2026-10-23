@@ -24,6 +24,8 @@ func main() {
 		"preset":      preset,
 		"kinds":       kinds,
 		"generate":    generate,
+		"workloads":   listWorkloads,
+		"workload":    workload,
 		"triangulate": triangulate,
 		"time":        timeRuns,
 	} {
@@ -75,6 +77,33 @@ func generate(args []js.Value) (any, error) {
 		return nil, err
 	}
 	f, err := demo.Generate(kind, uint64(seed))
+	if err != nil {
+		return nil, err
+	}
+	return flatToJS(f), nil
+}
+
+// listWorkloads returns [{name, about}] of the benchmark's polygon families, in their order.
+func listWorkloads([]js.Value) (any, error) {
+	ws := demo.Workloads()
+	out := make([]any, len(ws))
+	for i, w := range ws {
+		out[i] = map[string]any{"name": w.Name, "about": w.About}
+	}
+	return out, nil
+}
+
+// workload(name, vertices) returns the benchmark polygon as {coords, holeStarts}.
+func workload(args []js.Value) (any, error) {
+	name, err := argString(args, 0, "name")
+	if err != nil {
+		return nil, err
+	}
+	n, err := argInt(args, 1, "vertices")
+	if err != nil {
+		return nil, err
+	}
+	f, err := demo.Workload(name, n)
 	if err != nil {
 		return nil, err
 	}

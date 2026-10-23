@@ -69,10 +69,12 @@ Internal packages (test support only):
   oracle tests.
 - `internal/plydata`: reader for the PLY1 benchmark files and the FNV-1a result hash of `bench/bench.cpp`.
 - `cmd/earstrip-bench`: Go counterpart of `bench/bench.cpp`.
-- `internal/demo` + `cmd/demo`: the browser demo. `internal/demo` holds presets, generators and a reused
-  `Triangulator` (native, tested); `cmd/demo` (`_js.go` files, js/wasm only) publishes it as `globalThis.earstrip`.
-  `web/` is the Vite/React/shadcn front end (its own `go.mod` keeps `./...` out of `node_modules`), deployed to
-  GitHub Pages by `.github/workflows/pages.yml`.
+- `internal/demo` + `cmd/demo`: the browser demo. `internal/demo` holds presets, generators, the benchmark's
+  workloads (`workload.go`: polygon families at any size) and a reused `Triangulator` (native, tested); `cmd/demo`
+  (`_js.go` files, js/wasm only) publishes it as `globalThis.earstrip`. `web/` is the Vite/React/shadcn front end
+  (its own `go.mod` keeps `./...` out of `node_modules`), deployed to GitHub Pages by `.github/workflows/pages.yml`.
+  Its Performance tab (`web/src/lib/bench.ts`, `components/Benchmark.tsx`) times go-earstrip against earcut and
+  libtess.js in the browser.
 
 ## Rules for keeping it bit-exact
 
