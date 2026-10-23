@@ -18,6 +18,7 @@ import (
 
 	"github.com/cwbudde/go-earstrip"
 	"github.com/cwbudde/go-earstrip/internal/cases"
+	"github.com/cwbudde/go-earstrip/internal/demo"
 	"github.com/cwbudde/go-earstrip/internal/oracle"
 	"github.com/cwbudde/go-earstrip/internal/plydata"
 	"github.com/cwbudde/go-earstrip/internal/verify"
@@ -329,6 +330,28 @@ func TestDifferentialFlat(t *testing.T) {
 			}
 		}
 		m.report(total)
+	})
+}
+
+// TestDifferentialWorkloads compares the demo's benchmark polygons, large single rings among them, which neither the
+// generators nor the data files have (100,000 vertices not under -short).
+func TestDifferentialWorkloads(t *testing.T) {
+	sizes := []int{100, 1000, 10_000}
+	if !testing.Short() {
+		sizes = append(sizes, 100_000)
+	}
+	forSettings(t, func(t *testing.T, p *pair) {
+		for _, w := range demo.Workloads() {
+			for _, n := range sizes {
+				f, err := demo.Workload(w.Name, n)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := p.compareFlat(f.Coords, 2, f.HoleStarts); err != nil {
+					t.Errorf("%s, %d vertices: %v", w.Name, n, err)
+				}
+			}
+		}
 	})
 }
 

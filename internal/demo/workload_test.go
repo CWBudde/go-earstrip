@@ -1,8 +1,10 @@
 package demo
 
 import (
+	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/cwbudde/go-earstrip"
@@ -44,6 +46,28 @@ func TestWorkloads(t *testing.T) {
 			if res.Status != want {
 				t.Errorf("%s, %d: %v, want %v", w.Name, n, res.Status, want)
 			}
+		}
+	}
+}
+
+// BenchmarkWorkloads times a reused Runner with the default settings on every workload:
+//
+//	go test ./internal/demo -run '^$' -bench Workloads -count 6
+func BenchmarkWorkloads(b *testing.B) {
+	for _, w := range Workloads() {
+		for _, n := range []int{1000, 10_000, 100_000} {
+			f, err := Workload(w.Name, n)
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.Run(fmt.Sprintf("%s/%d", strings.ReplaceAll(w.Name, " ", "_"), n), func(b *testing.B) {
+				var r Runner
+				for b.Loop() {
+					if _, err := r.Run(f, defaults); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
 		}
 	}
 }
