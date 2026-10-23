@@ -43,6 +43,12 @@ type Triangulator[I Index] struct {
 	// the input of Run and RunFlat during the run, passed on by pointer so that it is not allocated
 	runPolygon Polygon
 	runFlat    FlatRings
+
+	// bounds of the merged nodes for bridge's scans (holes.go), bridgeBlockSize and bridgeGroupNodes at a time
+	bridgeBlocks  []bridgeBlock
+	bridgeGroups  []bridgeBlock
+	blockHits     []uint32 // node ranges a scan of bridge visits
+	bridgeIndexed bool     // the blocks are kept; otherwise bridge scans every node
 }
 
 const (
@@ -285,6 +291,9 @@ func (t *Triangulator[I]) runOnce(rings Rings) Status {
 	t.findTouches(used)
 	t.merged = assign(t.merged, len(t.holes)+1, 0)
 	t.merged[0] = 1
+	// every bridge adds at most two nodes
+	t.resetBridgeBlocks(used + 2*uint32(len(t.holes)))
+	t.markRing(0, outerCount)
 	t.order = t.order[:0]
 	for h := uint32(0); h < uint32(len(t.holes)); h++ {
 		t.order = append(t.order, h)
@@ -302,6 +311,7 @@ func (t *Triangulator[I]) runOnce(rings Rings) Status {
 			continue
 		}
 		t.merged[hole.ring] = 1
+		t.markRing(hole.first, hole.count)
 		t.joinTouchingRings(hole.first, hole.count)
 	}
 	boundary := t.classifyCycle(0)

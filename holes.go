@@ -536,6 +536,7 @@ func (t *Triangulator[I]) joinTouchingRings(first, count uint32) {
 					continue
 				}
 				t.merged[ring] = 1
+				t.markRing(t.holes[ring-1].first, t.holes[ring-1].count)
 				t.queue = append(t.queue, t.holes[ring-1].first, t.holes[ring-1].count)
 			}
 		}
@@ -568,6 +569,8 @@ func (t *Triangulator[I]) joinTouching(h *hole) bool {
 			n[sn].prev = v
 			n[s].next = vn
 			n[vn].prev = s
+			t.markEdge(v)
+			t.markEdge(s)
 			return true
 		}
 	}
@@ -628,43 +631,50 @@ func (t *Triangulator[I]) bridge(m uint32, used *uint32) bool {
 	edge, onEdge, onRay := uint32(none), uint32(none), uint32(none)
 	up := false
 	// the boundary is every node of a merged ring, each with its outgoing edge
-	for v := uint32(0); v < *used; v++ {
-		a := &n[v]
-		if merged[a.ring] == 0 {
-			continue
-		}
-		b := &n[a.next]
-		// nearest vertex lying on the ray itself, which the crossing test passes over
-		if a.y == my && a.x > mx && a.x < rayX {
-			rayX = a.x
-			onRay = v
-		}
-		through := false
-		if (a.y <= my) != (b.y <= my) {
-			// computed from the lower end so that coincident bridge edges give the same x
-			lo, hi := a, b
-			if !(a.y < b.y) {
-				lo, hi = b, a
+	//
+	// Only a node whose edge has an end at y == my or ends on both sides of my can change a result below (an edge with
+	// a NaN end only through its other end at my), and no such node is in a block whose bounds leave out my. The
+	// other blocks are scanned in the same increasing order as the C++ loop over [0, used), so the first and last
+	// winners of the ties are the same.
+	for ranges, k := t.blocksAtY(my, *used), 0; k < len(ranges); k += 2 {
+		for v := ranges[k]; v < ranges[k+1]; v++ {
+			a := &n[v]
+			if merged[a.ring] == 0 {
+				continue
 			}
-			x := lo.x
-			if lo.y != my {
-				x = lo.x + (my-lo.y)*(hi.x-lo.x)/(hi.y-lo.y)
+			b := &n[a.next]
+			// nearest vertex lying on the ray itself, which the crossing test passes over
+			if a.y == my && a.x > mx && a.x < rayX {
+				rayX = a.x
+				onRay = v
 			}
-			if x >= mx {
-				u := b.y > a.y
-				if x < bestX || (x == bestX && u && !up) {
-					bestX = x
-					edge = v
-					up = u
+			through := false
+			if (a.y <= my) != (b.y <= my) {
+				// computed from the lower end so that coincident bridge edges give the same x
+				lo, hi := a, b
+				if !(a.y < b.y) {
+					lo, hi = b, a
 				}
-				through = x == mx && lo.y != my
+				x := lo.x
+				if lo.y != my {
+					x = lo.x + (my-lo.y)*(hi.x-lo.x)/(hi.y-lo.y)
+				}
+				if x >= mx {
+					u := b.y > a.y
+					if x < bestX || (x == bestX && u && !up) {
+						bestX = x
+						edge = v
+						up = u
+					}
+					through = x == mx && lo.y != my
+				}
+			} else if a.y == my && b.y == my {
+				through = (a.x < mx && mx < b.x) || (b.x < mx && mx < a.x)
 			}
-		} else if a.y == my && b.y == my {
-			through = (a.x < mx && mx < b.x) || (b.x < mx && mx < a.x)
-		}
-		// m inside this edge with the hole on its inner side
-		if through && crossN(a, b, hp) >= 0 && crossN(a, b, hn) >= 0 {
-			onEdge = v
+			// m inside this edge with the hole on its inner side
+			if through && crossN(a, b, hp) >= 0 && crossN(a, b, hn) >= 0 {
+				onEdge = v
+			}
 		}
 	}
 
@@ -681,6 +691,9 @@ func (t *Triangulator[I]) bridge(m uint32, used *uint32) bool {
 		n[edgeEnd].prev = m2
 		t.samePos[m2] = t.samePos[m]
 		t.samePos[m] = m2
+		t.markEdge(onEdge)
+		t.markEdge(m2)
+		t.markEdge(mp)
 		return true
 	}
 	if onRay != none && rayX < bestX {
@@ -727,23 +740,26 @@ func (t *Triangulator[I]) bridge(m uint32, used *uint32) bool {
 	}
 	best := uint32(none)
 	bdx, bdy := 0.0, 0.0
-	for v := uint32(0); v < *used; v++ {
-		r := &n[v]
-		box := r.x >= mx && r.x <= px && r.y >= y0 && r.y <= y1
-		if box && !(r.x == px && r.y == py) && merged[r.ring] != 0 {
-			var inside bool
-			if above {
-				inside = cross(mx, my, ix, my, r.x, r.y) >= 0 && cross(ix, my, px, py, r.x, r.y) >= 0 && cross(px, py, mx, my, r.x, r.y) >= 0
-			} else {
-				inside = cross(mx, my, px, py, r.x, r.y) >= 0 && cross(px, py, ix, my, r.x, r.y) >= 0 && cross(ix, my, mx, my, r.x, r.y) >= 0
-			}
-			if inside && crossN(&n[r.prev], r, &n[r.next]) <= 0 {
-				dx, dy := r.x-mx, math.Abs(r.y-my)
-				lhs, rhs := dy*bdx, bdy*dx
-				if best == none || lhs < rhs || (lhs == rhs && dx < bdx) {
-					best = v
-					bdx = dx
-					bdy = dy
+	// only nodes inside the box count, and a block's bounds hold all of its merged nodes; same order as the C++
+	for ranges, k := t.blocksInBox(mx, px, y0, y1, *used), 0; k < len(ranges); k += 2 {
+		for v := ranges[k]; v < ranges[k+1]; v++ {
+			r := &n[v]
+			box := r.x >= mx && r.x <= px && r.y >= y0 && r.y <= y1
+			if box && !(r.x == px && r.y == py) && merged[r.ring] != 0 {
+				var inside bool
+				if above {
+					inside = cross(mx, my, ix, my, r.x, r.y) >= 0 && cross(ix, my, px, py, r.x, r.y) >= 0 && cross(px, py, mx, my, r.x, r.y) >= 0
+				} else {
+					inside = cross(mx, my, px, py, r.x, r.y) >= 0 && cross(px, py, ix, my, r.x, r.y) >= 0 && cross(ix, my, mx, my, r.x, r.y) >= 0
+				}
+				if inside && crossN(&n[r.prev], r, &n[r.next]) <= 0 {
+					dx, dy := r.x-mx, math.Abs(r.y-my)
+					lhs, rhs := dy*bdx, bdy*dx
+					if best == none || lhs < rhs || (lhs == rhs && dx < bdx) {
+						best = v
+						bdx = dx
+						bdy = dy
+					}
 				}
 			}
 		}
@@ -780,4 +796,174 @@ func (t *Triangulator[I]) splice(tn, m uint32, used *uint32) {
 	t.samePos[tn] = t2
 	t.samePos[m2] = t.samePos[m]
 	t.samePos[m] = m2
+	t.markEdge(tn)
+	t.markEdge(t2)
+	t.markEdge(m2)
+	t.markEdge(mp)
+}
+
+// Nodes [k·bridgeBlockSize, (k+1)·bridgeBlockSize) share bridge block k, and bridgeGroupNodes nodes share a group,
+// whose bounds hold those of its blocks.
+const (
+	bridgeBlockShift = 3
+	bridgeBlockSize  = 1 << bridgeBlockShift
+	bridgeGroupShift = bridgeBlockShift + 4
+	bridgeGroupNodes = 1 << bridgeGroupShift
+)
+
+// bridgeBlock lets bridge's two scans pass over runs of nodes that cannot change their result. yLo and yHi enclose
+// the y of both ends of the outgoing edge of every merged node in the run, xLo and xHi the x of these nodes. The
+// bounds only grow: a node is added again whenever its edge changes, so they may be loose but always hold every
+// merged node's current edge. A NaN coordinate is left out: a scan only takes a NaN end when the other end is at the
+// ray's y, which is in the bounds.
+type bridgeBlock struct{ yLo, yHi, xLo, xHi float64 }
+
+// add widens the bounds by a node at x, ay whose edge ends at y = by. Plain comparisons, so that a NaN changes
+// nothing.
+func (b *bridgeBlock) add(x, ay, by float64) {
+	if ay < b.yLo {
+		b.yLo = ay
+	}
+	if ay > b.yHi {
+		b.yHi = ay
+	}
+	if by < b.yLo {
+		b.yLo = by
+	}
+	if by > b.yHi {
+		b.yHi = by
+	}
+	if x < b.xLo {
+		b.xLo = x
+	}
+	if x > b.xHi {
+		b.xHi = x
+	}
+}
+
+// merge widens the bounds by those of o.
+func (b *bridgeBlock) merge(o *bridgeBlock) {
+	if o.yLo < b.yLo {
+		b.yLo = o.yLo
+	}
+	if o.yHi > b.yHi {
+		b.yHi = o.yHi
+	}
+	if o.xLo < b.xLo {
+		b.xLo = o.xLo
+	}
+	if o.xHi > b.xHi {
+		b.xHi = o.xHi
+	}
+}
+
+// holdsY is false when no edge of the run has an end at y or ends on both sides of it.
+func (b *bridgeBlock) holdsY(y float64) bool { return b.yLo <= y && y <= b.yHi }
+
+// meetsBox is false when no node of the run lies in [x0, x1] × [y0, y1].
+func (b *bridgeBlock) meetsBox(x0, x1, y0, y1 float64) bool {
+	return b.xHi >= x0 && b.xLo <= x1 && b.yHi >= y0 && b.yLo <= y1
+}
+
+// Below this many nodes, or with a single hole, bridge scans every node as the C++ does: the blocks would cost more
+// than they save.
+const bridgeIndexMin = 64
+
+// Empties the bridge blocks and groups for nodes [0, count), or turns them off for a small polygon.
+func (t *Triangulator[I]) resetBridgeBlocks(count uint32) {
+	t.bridgeIndexed = len(t.holes) > 1 && count >= bridgeIndexMin
+	if !t.bridgeIndexed {
+		return
+	}
+	empty := bridgeBlock{math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)}
+	t.bridgeBlocks = assign(t.bridgeBlocks, int((count+bridgeBlockSize-1)>>bridgeBlockShift), empty)
+	t.bridgeGroups = assign(t.bridgeGroups, int((count+bridgeGroupNodes-1)>>bridgeGroupShift), empty)
+}
+
+// Adds node v and its outgoing edge to v's block and group; called for every merged node and again when its edge
+// changes.
+func (t *Triangulator[I]) markEdge(v uint32) {
+	if !t.bridgeIndexed {
+		return
+	}
+	n := t.nodes
+	a := &n[v]
+	x, ay, by := a.x, a.y, n[a.next].y
+	t.bridgeBlocks[v>>bridgeBlockShift].add(x, ay, by)
+	t.bridgeGroups[v>>bridgeGroupShift].add(x, ay, by)
+}
+
+// Adds the nodes [first, first + count) of a ring that has just been merged, a block at a time.
+func (t *Triangulator[I]) markRing(first, count uint32) {
+	if !t.bridgeIndexed {
+		return
+	}
+	n := t.nodes
+	for v, end := first, first+count; v < end; {
+		k := v >> bridgeBlockShift
+		run := bridgeBlock{math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)}
+		for stop := min((k+1)<<bridgeBlockShift, end); v < stop; v++ {
+			a := &n[v]
+			run.add(a.x, a.y, n[a.next].y)
+		}
+		t.bridgeBlocks[k].merge(&run)
+		t.bridgeGroups[k>>(bridgeGroupShift-bridgeBlockShift)].merge(&run)
+	}
+}
+
+// Node ranges [start, end), as pairs in increasing order, that cover every block of nodes [0, used) whose bounds
+// hold y.
+func (t *Triangulator[I]) blocksAtY(y float64, used uint32) []uint32 {
+	hits := t.blockHits[:0]
+	if !t.bridgeIndexed {
+		hits = append(hits, 0, used)
+		t.blockHits = hits
+		return hits
+	}
+	blocks, groups := t.bridgeBlocks, t.bridgeGroups
+	for g := uint32(0); g < used; g += bridgeGroupNodes {
+		if !groups[g>>bridgeGroupShift].holdsY(y) {
+			continue
+		}
+		for first, end := g, min(g+bridgeGroupNodes, used); first < end; first += bridgeBlockSize {
+			if blocks[first>>bridgeBlockShift].holdsY(y) {
+				hits = addRange(hits, first, min(first+bridgeBlockSize, used))
+			}
+		}
+	}
+	t.blockHits = hits
+	return hits
+}
+
+// Node ranges [start, end), as pairs in increasing order, that cover every block of nodes [0, used) whose bounds
+// meet [x0, x1] × [y0, y1].
+func (t *Triangulator[I]) blocksInBox(x0, x1, y0, y1 float64, used uint32) []uint32 {
+	hits := t.blockHits[:0]
+	if !t.bridgeIndexed {
+		hits = append(hits, 0, used)
+		t.blockHits = hits
+		return hits
+	}
+	blocks, groups := t.bridgeBlocks, t.bridgeGroups
+	for g := uint32(0); g < used; g += bridgeGroupNodes {
+		if !groups[g>>bridgeGroupShift].meetsBox(x0, x1, y0, y1) {
+			continue
+		}
+		for first, end := g, min(g+bridgeGroupNodes, used); first < end; first += bridgeBlockSize {
+			if blocks[first>>bridgeBlockShift].meetsBox(x0, x1, y0, y1) {
+				hits = addRange(hits, first, min(first+bridgeBlockSize, used))
+			}
+		}
+	}
+	t.blockHits = hits
+	return hits
+}
+
+// addRange appends [start, end) to the range pairs, joined to the last one when it ends at start.
+func addRange(ranges []uint32, start, end uint32) []uint32 {
+	if k := len(ranges); k > 0 && ranges[k-1] == start {
+		ranges[k-1] = end
+		return ranges
+	}
+	return append(ranges, start, end)
 }
