@@ -141,6 +141,7 @@ type Runner struct {
 	t         earstrip.Triangulator[uint32]
 	triangles []uint32
 	restart   []uint32
+	batch     batchBuffers
 }
 
 // check returns an error for input RunFlat would panic on, or that the triangulator does not take.

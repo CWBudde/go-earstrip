@@ -64,6 +64,9 @@ watch the strips, the status and the extra points change; the triangles can be s
 The **Performance** tab times go-earstrip, in several settings, against [earcut](https://github.com/mapbox/earcut)
 and [libtess.js](https://github.com/brendankenny/libtess.js) (the GLU tessellator) on generated polygons from 100 to
 100,000 vertices or on your own, and compares what they write: triangles, indices, area and extra points.
+The **Showcase** tab's world map triangulates every country of [Natural Earth](https://www.naturalearthdata.com)
+(public domain; `just naturalearth` converts it into `web/public/world-*.bin`) in one call and draws the world from
+one restart index buffer.
 
 ```sh
 just dev-demo     # cmd/demo as js/wasm, then Vite's dev server at http://localhost:5173/go-earstrip/

@@ -6,6 +6,7 @@ import (
 	"syscall/js"
 	"time"
 
+	"github.com/cwbudde/go-earstrip"
 	"github.com/cwbudde/go-earstrip/internal/demo"
 )
 
@@ -20,14 +21,15 @@ func main() {
 	api := js.Global().Get("Object").New()
 	api.Set("goVersion", runtime.Version())
 	for name, fn := range map[string]Func{
-		"presets":     listPresets,
-		"preset":      preset,
-		"kinds":       kinds,
-		"generate":    generate,
-		"workloads":   listWorkloads,
-		"workload":    workload,
-		"triangulate": triangulate,
-		"time":        timeRuns,
+		"presets":         listPresets,
+		"preset":          preset,
+		"kinds":           kinds,
+		"generate":        generate,
+		"workloads":       listWorkloads,
+		"workload":        workload,
+		"triangulate":     triangulate,
+		"triangulateMany": triangulateMany,
+		"time":            timeRuns,
 	} {
 		api.Set(name, export(name, fn))
 	}
@@ -130,6 +132,43 @@ func triangulate(args []js.Value) (any, error) {
 		"triangles":      uint32sToJS(res.Triangles),
 		"restart":        uint32sToJS(res.Restart),
 		"extra":          float64sToJS(res.Extra),
+	}, nil
+}
+
+// triangulateMany(coords, ringStarts, polygonStarts, options) triangulates every polygon of the batch (see
+// demo.Batch) and returns them as one mesh: {vertices: Float32Array, restart, list, stripRestartEnds, stripListEnds,
+// polygonStrips: Uint32Arrays, polygonStatus: string[], statuses: {[status]: count}, extraPoints, ms}, ms the time
+// of the triangulation in Go.
+func triangulateMany(args []js.Value) (any, error) {
+	b, o, err := argBatch(args)
+	if err != nil {
+		return nil, err
+	}
+	res, err := runner.RunMany(b, o)
+	if err != nil {
+		return nil, err
+	}
+	statuses := map[string]any{}
+	for s, n := range res.Statuses {
+		if n > 0 {
+			statuses[earstrip.Status(s).String()] = n
+		}
+	}
+	polygonStatus := make([]any, len(res.PolygonStatus))
+	for i, s := range res.PolygonStatus {
+		polygonStatus[i] = s.String()
+	}
+	return map[string]any{
+		"vertices":         float32sToJS(res.Vertices),
+		"restart":          uint32sToJS(res.Restart),
+		"list":             uint32sToJS(res.List),
+		"stripRestartEnds": uint32sToJS(res.StripRestartEnds),
+		"stripListEnds":    uint32sToJS(res.StripListEnds),
+		"polygonStrips":    uint32sToJS(res.PolygonStrips),
+		"polygonStatus":    polygonStatus,
+		"statuses":         statuses,
+		"extraPoints":      res.ExtraPoints,
+		"ms":               float64(res.Elapsed.Nanoseconds()) / 1e6,
 	}, nil
 }
 

@@ -92,19 +92,9 @@ func argString(args []js.Value, i int, name string) (string, error) {
 func argPolygon(args []js.Value) (demo.Flat, demo.Options, error) {
 	var f demo.Flat
 	var o demo.Options
-	coords, err := arg(args, 0, "coords")
-	if err != nil {
+	var err error
+	if f.Coords, err = argCoords(args, 0); err != nil {
 		return f, o, err
-	}
-	if !coords.InstanceOf(js.Global().Get("Float64Array")) {
-		return f, o, errors.New("argument 0 (coords): want a Float64Array")
-	}
-	view := js.Global().Get("Uint8Array").New(coords.Get("buffer"), coords.Get("byteOffset"), coords.Get("byteLength"))
-	b := make([]byte, view.Get("length").Int())
-	js.CopyBytesToGo(b, view)
-	f.Coords = make([]float64, len(b)/8)
-	for i := range f.Coords {
-		f.Coords[i] = math.Float64frombits(binary.LittleEndian.Uint64(b[8*i:]))
 	}
 
 	starts, err := arg(args, 1, "holeStarts")
@@ -123,12 +113,79 @@ func argPolygon(args []js.Value) (demo.Flat, demo.Options, error) {
 		f.HoleStarts[i] = n
 	}
 
-	options, err := arg(args, 2, "options")
+	o, err = argOptions(args, 2)
+	return f, o, err
+}
+
+// argBatch reads the arguments coords (a Float64Array of x, y pairs), ringStarts and polygonStarts (Uint32Arrays,
+// see demo.Batch) and options, as argPolygon does.
+func argBatch(args []js.Value) (demo.Batch, demo.Options, error) {
+	var b demo.Batch
+	var o demo.Options
+	var err error
+	if b.Coords, err = argCoords(args, 0); err != nil {
+		return b, o, err
+	}
+	if b.RingStarts, err = argIndices(args, 1, "ringStarts"); err != nil {
+		return b, o, err
+	}
+	if b.PolygonStarts, err = argIndices(args, 2, "polygonStarts"); err != nil {
+		return b, o, err
+	}
+	o, err = argOptions(args, 3)
+	return b, o, err
+}
+
+// argCoords reads argument i, a Float64Array of coordinates.
+func argCoords(args []js.Value, i int) ([]float64, error) {
+	b, err := argTypedBytes(args, i, "coords", "Float64Array")
 	if err != nil {
-		return f, o, err
+		return nil, err
+	}
+	out := make([]float64, len(b)/8)
+	for k := range out {
+		out[k] = math.Float64frombits(binary.LittleEndian.Uint64(b[8*k:]))
+	}
+	return out, nil
+}
+
+// argIndices reads argument i, a Uint32Array, as ints.
+func argIndices(args []js.Value, i int, name string) ([]int, error) {
+	b, err := argTypedBytes(args, i, name, "Uint32Array")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]int, len(b)/4)
+	for k := range out {
+		out[k] = int(binary.LittleEndian.Uint32(b[4*k:]))
+	}
+	return out, nil
+}
+
+// argTypedBytes copies the bytes of argument i, which must be a typed array of the type named, to Go.
+func argTypedBytes(args []js.Value, i int, name, typ string) ([]byte, error) {
+	v, err := arg(args, i, name)
+	if err != nil {
+		return nil, err
+	}
+	if !v.InstanceOf(js.Global().Get(typ)) {
+		return nil, fmt.Errorf("argument %d (%s): want a %s", i, name, typ)
+	}
+	view := js.Global().Get("Uint8Array").New(v.Get("buffer"), v.Get("byteOffset"), v.Get("byteLength"))
+	b := make([]byte, view.Get("length").Int())
+	js.CopyBytesToGo(b, view)
+	return b, nil
+}
+
+// argOptions reads argument i, the options {forcedCuts, constrained, extraPoints, triangleList}, each a boolean.
+func argOptions(args []js.Value, i int) (demo.Options, error) {
+	var o demo.Options
+	options, err := arg(args, i, "options")
+	if err != nil {
+		return o, err
 	}
 	if options.Type() != js.TypeObject {
-		return f, o, fmt.Errorf("argument 2 (options): want an object, got %s", options.Type())
+		return o, fmt.Errorf("argument %d (options): want an object, got %s", i, options.Type())
 	}
 	for name, dst := range map[string]*bool{
 		"forcedCuts":   &o.ForcedCuts,
@@ -138,11 +195,11 @@ func argPolygon(args []js.Value) (demo.Flat, demo.Options, error) {
 	} {
 		v := options.Get(name)
 		if v.Type() != js.TypeBoolean {
-			return f, o, fmt.Errorf("argument 2 (options): %s: want a boolean, got %s", name, v.Type())
+			return o, fmt.Errorf("argument %d (options): %s: want a boolean, got %s", i, name, v.Type())
 		}
 		*dst = v.Bool()
 	}
-	return f, o, nil
+	return o, nil
 }
 
 // flatToJS converts a polygon to {coords: Float64Array, holeStarts: number[]}.
@@ -168,6 +225,15 @@ func uint32sToJS(values []uint32) js.Value {
 		binary.LittleEndian.PutUint32(b[4*i:], v)
 	}
 	return js.Global().Get("Uint32Array").New(bytesToJS(b).Get("buffer"))
+}
+
+// float32sToJS copies values to a new Float32Array.
+func float32sToJS(values []float32) js.Value {
+	b := make([]byte, 4*len(values))
+	for i, v := range values {
+		binary.LittleEndian.PutUint32(b[4*i:], math.Float32bits(v))
+	}
+	return js.Global().Get("Float32Array").New(bytesToJS(b).Get("buffer"))
 }
 
 // float64sToJS copies values to a new Float64Array.
