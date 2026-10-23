@@ -47,6 +47,43 @@ export interface Result {
   extra: Float64Array;
 }
 
+/**
+ * Many polygons in one buffer, as a map tile holds them; see
+ * internal/demo.Batch.
+ */
+export interface Batch {
+  /** x, y per vertex of all rings of all polygons, in order. */
+  coords: Float64Array;
+  /** The vertex where each ring starts, ascending, the first 0. */
+  ringStarts: Uint32Array;
+  /** The ring where each polygon starts, ascending, the first 0. */
+  polygonStarts: Uint32Array;
+}
+
+/** What triangulateMany gives: all polygons as one mesh; see internal/demo.BatchResult. */
+export interface BatchResult {
+  /** x, y of the input vertices in order, then each polygon's extra points. */
+  vertices: Float32Array;
+  /**
+   * The strips of all polygons, RESTART_INDEX between strips and between
+   * polygons, indices into vertices: one TRIANGLE_STRIP draw call.
+   */
+  restart: Uint32Array;
+  /** The same triangles as a list, three indices each into vertices. */
+  list: Uint32Array;
+  /** Per strip, where it ends in restart. */
+  stripRestartEnds: Uint32Array;
+  /** Per strip, where its triangles end in list. */
+  stripListEnds: Uint32Array;
+  /** The first strip of each polygon and, last, the number of strips. */
+  polygonStrips: Uint32Array;
+  polygonStatus: Status[];
+  statuses: Partial<Record<Status, number>>;
+  extraPoints: number;
+  /** The time of the triangulation in Go, in milliseconds. */
+  ms: number;
+}
+
 /** The primitive restart index of Result.restart, WebGL 2's for 32-bit indices. */
 export const RESTART_INDEX = 0xffffffff;
 
@@ -90,6 +127,12 @@ interface EarstripGlobal {
     holeStarts: number[],
     options: Options,
   ): WasmResult<Result>;
+  triangulateMany(
+    coords: Float64Array,
+    ringStarts: Uint32Array,
+    polygonStarts: Uint32Array,
+    options: Options,
+  ): WasmResult<BatchResult>;
   time(
     coords: Float64Array,
     holeStarts: number[],
@@ -154,6 +197,22 @@ export class Earstrip {
   triangulate(polygon: Flat, options: Options): Result {
     return unwrap(
       this.#api.triangulate(polygon.coords, polygon.holeStarts, options),
+    );
+  }
+
+  /**
+   * Triangulates every polygon of the batch on its own, as triangulate would,
+   * and joins them into one mesh. options.triangleList is ignored: the result
+   * holds both the strips and the list.
+   */
+  triangulateMany(batch: Batch, options: Options): BatchResult {
+    return unwrap(
+      this.#api.triangulateMany(
+        batch.coords,
+        batch.ringStarts,
+        batch.polygonStarts,
+        options,
+      ),
     );
   }
 

@@ -48,6 +48,10 @@ fmt:
 fetch-data *files:
     ./scripts/fetch-data.sh {{files}}
 
+# The Showcase's world map: Natural Earth's countries (public domain) into web/public/world-110m.bin, world-50m.bin
+naturalearth *args:
+    go run ./cmd/naturalearth -o web/public {{args}}
+
 # Build the browser demo: cmd/demo as js/wasm into web/public, then the Vite app into web/dist
 build-demo: _demo-wasm
     npm --prefix web ci

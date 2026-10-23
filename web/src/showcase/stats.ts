@@ -2,7 +2,15 @@
 // ran any, and moving averages of their time and of the frame rate. A demo
 // triangulates through FrameStats.run, which times the wasm call.
 
-import type { Earstrip, Flat, Options, Result, Status } from "@/wasm/earstrip";
+import type {
+  Batch,
+  BatchResult,
+  Earstrip,
+  Flat,
+  Options,
+  Result,
+  Status,
+} from "@/wasm/earstrip";
 
 /** The settings of the Playground's defaults. */
 export const DEFAULT_OPTIONS: Options = {
@@ -102,6 +110,33 @@ export class FrameStats {
     f.strips += r.stripEnds.length;
     f.stripIndices += r.restart.length;
     f.extraPoints += r.extra.length / 2;
+    return r;
+  }
+
+  /**
+   * Triangulates the batch in one call, timed, and counts each of its
+   * polygons into the frame as run would.
+   */
+  runMany(
+    api: Earstrip,
+    batch: Batch,
+    options: Options = DEFAULT_OPTIONS,
+  ): BatchResult {
+    const start = performance.now();
+    const r = api.triangulateMany(batch, options);
+    this.#frameMs += performance.now() - start;
+    const f = this.#frame;
+    f.calls += batch.polygonStarts.length;
+    for (const [k, n] of Object.entries(r.statuses) as [Status, number][]) {
+      f.statuses[k] = (f.statuses[k] ?? 0) + n;
+    }
+    f.vertices += batch.coords.length / 2;
+    f.rings += batch.ringStarts.length;
+    f.triangles += r.list.length / 3;
+    f.strips += r.stripListEnds.length;
+    // The whole buffer, with the restart indices between polygons.
+    f.stripIndices += r.restart.length;
+    f.extraPoints += r.extraPoints;
     return r;
   }
 
